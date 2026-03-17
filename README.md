@@ -96,6 +96,7 @@ python -m pip install --upgrade pip
 - 额外生成 `dist\Cloud-DICOM-Downloader-windows.zip`
 
 如果机器上已经安装了 Inno Setup，并且 `ISCC` 在 `PATH` 中，脚本还会额外生成 `dist\Cloud-DICOM-Downloader-Setup.exe`。
+安装包会自动捆绑并静默安装 `Microsoft Visual C++ 2015-2022 Redistributable (x64)`。
 
 ### GitHub Actions 自动构建 Windows 安装包
 
@@ -123,6 +124,21 @@ python -m pip install --upgrade pip
 git tag v0.1.0
 git push origin v0.1.0
 ```
+
+### Windows 兼容性说明
+
+当前桌面版不是面向 Windows 7/8.x 的。
+
+- 工作流固定使用 Python 3.12，见 [build-windows.yml](/Users/johan/panda/cloud-dicom-downloader/.github/workflows/build-windows.yml#L20)
+- 桌面界面使用 PySide6，也就是 Qt 6，依赖见 [requirements-desktop.txt](/Users/johan/panda/cloud-dicom-downloader/requirements-desktop.txt)
+- 部分站点依赖 Playwright 浏览器自动化，相关入口见 [crawlers/_browser.py](/Users/johan/panda/cloud-dicom-downloader/crawlers/_browser.py#L74)
+
+如果你在 Windows 7 上看到：
+
+- `api-ms-win-core-path-l1-1-0.dll` 缺失
+- `python312.dll` 无法加载
+
+这通常不是“少拷了一个 DLL”，而是系统版本本身不满足运行条件。当前建议的目标系统是 `Windows 10 x64 / Windows 11 x64`。
 
 ## 支持的站点
 

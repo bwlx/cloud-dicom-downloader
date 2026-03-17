@@ -13,6 +13,13 @@ $AppDir = Join-Path $DistDir $AppName
 $SafeVersion = $Version -replace '[^0-9A-Za-z.\-_]+', '-'
 $ZipName = "Cloud-DICOM-Downloader-windows-$SafeVersion.zip"
 $SetupName = "Cloud-DICOM-Downloader-Setup-$SafeVersion.exe"
+$BuildSupportDir = Join-Path $RootDir "build\windows-support"
+$VCRedistPath = Join-Path $BuildSupportDir "vc_redist.x64.exe"
+
+New-Item -ItemType Directory -Path $BuildSupportDir -Force | Out-Null
+Invoke-WebRequest `
+	-Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" `
+	-OutFile $VCRedistPath
 
 python -m pip install -r requirements-packaging.txt
 python -m playwright install chromium
@@ -31,6 +38,7 @@ if ($InnoSetup) {
 		"/DMyOutputDir=$DistDir" `
 		"/DMyAppVersion=$SafeVersion" `
 		"/DMyOutputBaseFilename=Cloud-DICOM-Downloader-Setup-$SafeVersion" `
+		"/DVCRedistPath=$VCRedistPath" `
 		cloud_dicom_downloader.iss
 	Write-Host "Built $SetupName"
 } else {
