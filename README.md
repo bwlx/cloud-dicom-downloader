@@ -48,6 +48,82 @@
 - 输入`pip install -r requirements.txt`并按回车键。
 - 等待运行完成，然后根据要下载的网站，选择下面一节中的的命令运行。
 
+### 桌面客户端
+
+如果希望直接使用本地桌面客户端，可以安装桌面依赖后运行：
+
+```bash
+pip install -r requirements-desktop.txt
+python desktop_app.py
+```
+
+桌面版仍然完全本地运行，不依赖服务端；可以直接粘贴报告链接、选择保存目录并查看下载日志。
+
+### 打包 macOS 安装包
+
+在 macOS 上可以直接执行：
+
+```bash
+./build_macos.sh
+```
+
+脚本会安装打包依赖、补齐 Playwright 的 Chromium、生成 `.app` 和 `.dmg`，产物位于 `dist/` 目录。
+当前脚本生成的是未签名安装包；如果要在外部分发，还需要自行做 Apple 签名和 notarization。
+
+### 打包 Windows 版本
+
+PyInstaller 不是跨平台交叉编译器，Windows 版需要在 Windows 机器上构建。
+
+准备环境：
+
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+```
+
+直接执行：
+
+```powershell
+.\build_windows.ps1
+```
+
+脚本会：
+
+- 安装桌面端和打包依赖
+- 运行 `playwright install chromium`
+- 用 `cloud_dicom_downloader.spec` 生成 `dist\Cloud DICOM Downloader\`
+- 额外生成 `dist\Cloud-DICOM-Downloader-windows.zip`
+
+如果机器上已经安装了 Inno Setup，并且 `ISCC` 在 `PATH` 中，脚本还会额外生成 `dist\Cloud-DICOM-Downloader-Setup.exe`。
+
+### GitHub Actions 自动构建 Windows 安装包
+
+仓库已经增加工作流 [build-windows.yml](/Users/johan/panda/cloud-dicom-downloader/.github/workflows/build-windows.yml)：
+
+- 手动触发：`Actions -> Build Windows Installer -> Run workflow`
+- 自动触发：推送 `v*` 标签，例如 `v0.1.0`
+
+工作流会在 `windows-latest` runner 上：
+
+- 安装 Python 3.12
+- 缓存 pip 依赖
+- 安装 Inno Setup
+- 执行 `build_windows.ps1`
+- 上传 zip 和安装包为 workflow artifact
+
+当触发来源是 tag 时，还会自动创建或更新 GitHub Release，并上传：
+
+- `Cloud-DICOM-Downloader-windows-<version>.zip`
+- `Cloud-DICOM-Downloader-Setup-<version>.exe`
+
+建议的发版命令：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
 ## 支持的站点
 
 ### medicalimagecloud.com

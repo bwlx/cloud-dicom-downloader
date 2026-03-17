@@ -11,7 +11,7 @@ from tqdm import tqdm
 from yarl import URL
 
 from crawlers._browser import wait_text, run_with_browser, PlaywrightCrawler
-from crawlers._utils import suggest_save_dir
+from crawlers._utils import get_download_root, suggest_save_dir
 
 
 @dataclass(frozen=True, eq=False)
@@ -79,7 +79,7 @@ class FitImageDownloader(PlaywrightCrawler):
 		body = await response.body()
 		index = dcmread(BytesIO(body)).InstanceNumber
 
-		dir_ = Path(f"download/{self._study_id}/{series_id}/{index}.dcm")
+		dir_ = get_download_root() / self._study_id / series_id / f"{index}.dcm"
 		dir_.parent.mkdir(parents=True, exist_ok=True)
 		dir_.write_bytes(body)
 
@@ -92,7 +92,7 @@ class FitImageDownloader(PlaywrightCrawler):
 			await response.frame.page.context.close()
 
 	def _fix_series_name(self, study: _FitImageStudyInfo):
-		save_to = Path(f"download/{self._study_id}")
+		save_to = get_download_root() / self._study_id
 		for s in save_to.iterdir():
 			desc, size = study.series[s.name]
 			s.rename(s.with_name(desc))

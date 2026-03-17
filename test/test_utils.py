@@ -28,12 +28,13 @@ async def test_response_dumping():
 	app.router.add_get('/', hello)
 	runner = web.AppRunner(app)
 	await runner.setup()
-	site = web.TCPSite(runner, '[::1]', 12345)
+	site = web.TCPSite(runner, '127.0.0.1', 0)
 	await site.start()
+	port = site._server.sockets[0].getsockname()[1]
 
 	client = new_http_client()
 	try:
-		await client.get('http://[::1]:12345')
+		await client.get(f'http://127.0.0.1:{port}')
 		pytest.fail()
 	except ClientResponseError:
 		assert Path("dump.zip").exists()

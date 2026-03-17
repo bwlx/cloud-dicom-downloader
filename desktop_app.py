@@ -1,0 +1,468 @@
+import argparse
+import asyncio
+import re
+import sys
+from pathlib import Path
+
+from PySide6.QtCore import QProcess, QProcessEnvironment, QSettings, QTimer, QUrl
+from PySide6.QtGui import QDesktopServices, QFont, QTextCursor
+from PySide6.QtWidgets import (
+	QApplication,
+	QCheckBox,
+	QFileDialog,
+	QGridLayout,
+	QGroupBox,
+	QHBoxLayout,
+	QLabel,
+	QLineEdit,
+	QMainWindow,
+	QMessageBox,
+	QPlainTextEdit,
+	QProgressBar,
+	QPushButton,
+	QVBoxLayout,
+	QWidget,
+)
+
+from desktop_core import DownloadRequest, run_download_request, url_requires_password, url_supports_raw
+from runtime_config import DOWNLOAD_ROOT_ENV
+
+BASE_DIR = Path(__file__).resolve().parent
+APP_NAME = "Cloud DICOM Downloader"
+_SAVE_PATTERNS = (
+	re.compile(r"保存到[:：]\s*(.+)"),
+	re.compile(r"下载完成，保存位置\s*(.+)"),
+	re.compile(r"下载.+?到[:：]\s*(.+)"),
+)
+
+
+def build_worker_arguments(request: DownloadRequest) -> list[str]:
+	args = ["--worker", request.url]
+
+	if request.password:
+		args.extend(["--password", request.password])
+	if request.raw:
+		args.append("--raw")
+	if request.output_dir:
+		args.extend(["--output", request.output_dir])
+
+	return args
+
+
+def default_output_dir() -> str:
+	downloads_dir = Path.home() / "Downloads" / "cloud-dicom-downloader"
+	return str(downloads_dir)
+
+
+def worker_entry(argv: list[str]) -> int:
+	parser = argparse.ArgumentParser()
+	parser.add_argument("--worker", action="store_true")
+	parser.add_argument("--password")
+	parser.add_argument("--raw", action="store_true")
+	parser.add_argument("--output")
+	parser.add_argument("url")
+	args = parser.parse_args(argv)
+
+	request = DownloadRequest(
+		url=args.url,
+		password=args.password,
+		raw=args.raw,
+		output_dir=args.output,
+	)
+
+	try:
+		asyncio.run(run_download_request(request))
+	except Exception as exc:
+		print(f"错误: {exc}", file=sys.stderr)
+		return 1
+
+	return 0
+
+
+class MainWindow(QMainWindow):
+	def __init__(self):
+		super().__init__()
+		self.process: QProcess | None = None
+		self.current_output_path: str | None = None
+		self.settings = QSettings("codex", "cloud-dicom-downloader")
+
+		self.setWindowTitle(APP_NAME)
+		self.resize(980, 720)
+		self.setMinimumSize(820, 620)
+		self._build_ui()
+		self._apply_style()
+		self._restore_settings()
+		self._update_url_state()
+
+	def _build_ui(self):
+		root = QWidget(self)
+		layout = QVBoxLayout(root)
+		layout.setContentsMargins(24, 24, 24, 24)
+		layout.setSpacing(16)
+
+		header = QLabel("医疗云影像下载器")
+		header.setObjectName("HeroTitle")
+		header.setFont(QFont("PingFang SC", 22, QFont.Weight.DemiBold))
+
+		subtitle = QLabel("纯本地运行，输入报告链接后直接下载 DICOM 到本机目录。")
+		subtitle.setObjectName("HeroSubtitle")
+		subtitle.setWordWrap(True)
+
+		form_box = QGroupBox("下载任务")
+		form_layout = QGridLayout(form_box)
+		form_layout.setHorizontalSpacing(12)
+		form_layout.setVerticalSpacing(12)
+
+		self.url_edit = QLineEdit()
+		self.url_edit.setPlaceholderText("粘贴报告链接")
+		self.url_edit.textChanged.connect(self._update_url_state)
+
+		self.password_edit = QLineEdit()
+		self.password_edit.setPlaceholderText("该站点需要密码时填写")
+		self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+
+		self.raw_check = QCheckBox("下载原始像素（仅支持海纳医信相关站点）")
+
+		self.output_edit = QLineEdit()
+		self.output_edit.setPlaceholderText("选择输出目录")
+
+		browse_button = QPushButton("选择目录")
+		browse_button.clicked.connect(self._select_output_dir)
+
+		self.site_hint = QLabel()
+		self.site_hint.setObjectName("HintLabel")
+		self.site_hint.setWordWrap(True)
+
+		form_layout.addWidget(QLabel("报告链接"), 0, 0)
+		form_layout.addWidget(self.url_edit, 0, 1, 1, 2)
+		form_layout.addWidget(QLabel("访问密码"), 1, 0)
+		form_layout.addWidget(self.password_edit, 1, 1, 1, 2)
+		form_layout.addWidget(self.raw_check, 2, 1, 1, 2)
+		form_layout.addWidget(QLabel("保存目录"), 3, 0)
+		form_layout.addWidget(self.output_edit, 3, 1)
+		form_layout.addWidget(browse_button, 3, 2)
+		form_layout.addWidget(self.site_hint, 4, 0, 1, 3)
+
+		status_box = QGroupBox("运行状态")
+		status_layout = QVBoxLayout(status_box)
+		status_layout.setSpacing(10)
+
+		self.status_label = QLabel("待开始")
+		self.status_label.setObjectName("StatusLabel")
+
+		self.progress_bar = QProgressBar()
+		self.progress_bar.setTextVisible(False)
+		self.progress_bar.setRange(0, 1)
+		self.progress_bar.setValue(0)
+
+		log_actions = QHBoxLayout()
+		log_actions.setSpacing(10)
+
+		self.start_button = QPushButton("开始下载")
+		self.start_button.clicked.connect(self._start_download)
+
+		self.stop_button = QPushButton("停止任务")
+		self.stop_button.clicked.connect(self._stop_download)
+		self.stop_button.setEnabled(False)
+
+		self.open_button = QPushButton("打开目录")
+		self.open_button.clicked.connect(self._open_output_dir)
+		self.open_button.setEnabled(False)
+
+		self.log_edit = QPlainTextEdit()
+		self.log_edit.setReadOnly(True)
+		self.log_edit.setPlaceholderText("运行日志会显示在这里")
+
+		clear_button = QPushButton("清空日志")
+		clear_button.clicked.connect(self.log_edit.clear)
+
+		log_actions.addWidget(self.start_button)
+		log_actions.addWidget(self.stop_button)
+		log_actions.addWidget(self.open_button)
+		log_actions.addStretch(1)
+		log_actions.addWidget(clear_button)
+
+		status_layout.addWidget(self.status_label)
+		status_layout.addWidget(self.progress_bar)
+		status_layout.addLayout(log_actions)
+		status_layout.addWidget(self.log_edit, 1)
+
+		layout.addWidget(header)
+		layout.addWidget(subtitle)
+		layout.addWidget(form_box)
+		layout.addWidget(status_box, 1)
+		self.setCentralWidget(root)
+
+	def _apply_style(self):
+		self.setStyleSheet(
+			"""
+			QWidget {
+				background: #f4efe7;
+				color: #1f2933;
+				font-size: 14px;
+			}
+			QGroupBox {
+				background: #fffaf3;
+				border: 1px solid #d8cdbf;
+				border-radius: 14px;
+				margin-top: 12px;
+				padding-top: 18px;
+				font-weight: 600;
+			}
+			QGroupBox::title {
+				subcontrol-origin: margin;
+				left: 14px;
+				padding: 0 6px;
+			}
+			QLineEdit, QPlainTextEdit {
+				background: #fffdf9;
+				border: 1px solid #cbbba9;
+				border-radius: 10px;
+				padding: 10px 12px;
+				selection-background-color: #a54d2d;
+			}
+			QPushButton {
+				background: #a54d2d;
+				border: none;
+				border-radius: 10px;
+				color: white;
+				padding: 10px 16px;
+				font-weight: 600;
+			}
+			QPushButton:disabled {
+				background: #c7b8aa;
+				color: #f7f2eb;
+			}
+			QPushButton:hover:!disabled {
+				background: #8f4125;
+			}
+			QCheckBox {
+				padding-top: 2px;
+			}
+			QProgressBar {
+				border: 1px solid #d8cdbf;
+				border-radius: 8px;
+				background: #fbf6ee;
+				min-height: 12px;
+			}
+			QProgressBar::chunk {
+				border-radius: 8px;
+				background: #ce7338;
+			}
+			QLabel#HeroTitle {
+				color: #3f2a1d;
+			}
+			QLabel#HeroSubtitle, QLabel#HintLabel {
+				color: #64584c;
+			}
+			QLabel#StatusLabel {
+				font-size: 15px;
+				font-weight: 600;
+				color: #583726;
+			}
+			"""
+		)
+
+	def _restore_settings(self):
+		self.output_edit.setText(self.settings.value("output_dir", default_output_dir()))
+
+	def closeEvent(self, event):
+		if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
+			reply = QMessageBox.question(self, "退出确认", "当前还有下载任务，确定要退出吗？")
+			if reply != QMessageBox.StandardButton.Yes:
+				event.ignore()
+				return
+			self.process.kill()
+			self.process.waitForFinished(3000)
+
+		self.settings.setValue("output_dir", self.output_edit.text().strip())
+		super().closeEvent(event)
+
+	def _select_output_dir(self):
+		directory = QFileDialog.getExistingDirectory(self, "选择下载目录", self.output_edit.text().strip())
+		if directory:
+			self.output_edit.setText(directory)
+
+	def _update_url_state(self):
+		url = self.url_edit.text().strip()
+		password_required = False
+		raw_supported = False
+
+		if url:
+			try:
+				password_required = url_requires_password(url)
+				raw_supported = url_supports_raw(url)
+			except Exception:
+				self.site_hint.setText("链接暂时无法识别，请检查是否完整。")
+			else:
+				if password_required:
+					self.site_hint.setText("该站点需要访问密码。")
+				elif raw_supported:
+					self.site_hint.setText("该站点支持原始像素下载。")
+				else:
+					self.site_hint.setText("该站点不需要密码，默认按兼容格式下载。")
+		else:
+			self.site_hint.setText("支持直接粘贴医疗影像报告链接。")
+
+		self.password_edit.setEnabled(password_required)
+		if not password_required:
+			self.password_edit.clear()
+
+		self.raw_check.setEnabled(raw_supported)
+		if not raw_supported:
+			self.raw_check.setChecked(False)
+
+	def _start_download(self):
+		url = self.url_edit.text().strip()
+		password = self.password_edit.text().strip() or None
+		output_dir = self.output_edit.text().strip()
+
+		if not url:
+			QMessageBox.warning(self, "参数错误", "请先输入报告链接。")
+			return
+		if not output_dir:
+			QMessageBox.warning(self, "参数错误", "请选择保存目录。")
+			return
+		try:
+			password_required = url_requires_password(url)
+		except Exception:
+			QMessageBox.warning(self, "参数错误", "报告链接格式不正确。")
+			return
+
+		if password_required and not password:
+			QMessageBox.warning(self, "参数错误", "该站点需要访问密码。")
+			return
+
+		request = DownloadRequest(
+			url=url,
+			password=password,
+			raw=self.raw_check.isChecked(),
+			output_dir=output_dir,
+		)
+
+		self.log_edit.clear()
+		self.current_output_path = None
+		self.open_button.setEnabled(False)
+		self.status_label.setText("任务启动中")
+		self.progress_bar.setRange(0, 0)
+		self.start_button.setEnabled(False)
+		self.stop_button.setEnabled(True)
+		self.settings.setValue("output_dir", output_dir)
+
+		process = QProcess(self)
+		process.setWorkingDirectory(str(BASE_DIR))
+		process.setProcessChannelMode(QProcess.ProcessChannelMode.SeparateChannels)
+
+		env = QProcessEnvironment.systemEnvironment()
+		env.insert("PYTHONUNBUFFERED", "1")
+		env.insert(DOWNLOAD_ROOT_ENV, output_dir)
+		process.setProcessEnvironment(env)
+
+		process.readyReadStandardOutput.connect(self._consume_stdout)
+		process.readyReadStandardError.connect(self._consume_stderr)
+		process.finished.connect(self._on_process_finished)
+
+		if getattr(sys, "frozen", False):
+			program = sys.executable
+			args = build_worker_arguments(request)
+		else:
+			program = sys.executable
+			args = [str(Path(__file__).resolve()), *build_worker_arguments(request)]
+
+		self.process = process
+		process.start(program, args)
+		if not process.waitForStarted(5000):
+			self.status_label.setText("任务启动失败")
+			self.progress_bar.setRange(0, 1)
+			self.progress_bar.setValue(0)
+			self.start_button.setEnabled(True)
+			self.stop_button.setEnabled(False)
+			QMessageBox.critical(self, "启动失败", "无法启动本地下载进程。")
+			process.deleteLater()
+			self.process = None
+			return
+
+	def _append_log_text(self, text: str):
+		cleaned = text.replace("\r", "\n")
+		if not cleaned:
+			return
+
+		self.log_edit.moveCursor(QTextCursor.MoveOperation.End)
+		self.log_edit.insertPlainText(cleaned)
+		self.log_edit.moveCursor(QTextCursor.MoveOperation.End)
+
+		for line in cleaned.splitlines():
+			path = self._extract_output_path(line.strip())
+			if path:
+				self.current_output_path = path
+				self.open_button.setEnabled(True)
+
+	def _extract_output_path(self, line: str) -> str | None:
+		for pattern in _SAVE_PATTERNS:
+			match = pattern.search(line)
+			if match:
+				return match.group(1).strip()
+		return None
+
+	def _consume_stdout(self):
+		if not self.process:
+			return
+		text = bytes(self.process.readAllStandardOutput()).decode("utf-8", errors="replace")
+		self._append_log_text(text)
+
+	def _consume_stderr(self):
+		if not self.process:
+			return
+		text = bytes(self.process.readAllStandardError()).decode("utf-8", errors="replace")
+		self._append_log_text(text)
+
+	def _on_process_finished(self, exit_code: int, _status):
+		self.progress_bar.setRange(0, 1)
+		self.progress_bar.setValue(1 if exit_code == 0 else 0)
+		self.start_button.setEnabled(True)
+		self.stop_button.setEnabled(False)
+
+		if exit_code == 0:
+			self.status_label.setText("下载完成")
+		else:
+			self.status_label.setText("下载失败")
+
+		if self.process:
+			self.process.deleteLater()
+			self.process = None
+
+	def _stop_download(self):
+		if not self.process:
+			return
+
+		self.status_label.setText("正在停止任务")
+		self.process.terminate()
+
+		def hard_kill():
+			if self.process and self.process.state() != QProcess.ProcessState.NotRunning:
+				self.process.kill()
+
+		QTimer.singleShot(3000, hard_kill)
+
+	def _open_output_dir(self):
+		path = self.current_output_path or self.output_edit.text().strip()
+		if not path:
+			return
+		QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+
+
+def gui_entry() -> int:
+	app = QApplication(sys.argv)
+	window = MainWindow()
+	window.show()
+	return app.exec()
+
+
+def main() -> int:
+	if "--worker" in sys.argv[1:]:
+		return worker_entry(sys.argv[1:])
+	return gui_entry()
+
+
+if __name__ == "__main__":
+	raise SystemExit(main())

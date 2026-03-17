@@ -4,9 +4,11 @@ from yarl import URL
 
 from tools.manual import deserialize_ws, HTTPDumpFile
 
+FIXTURE_DIR = Path(__file__).parent / "fixtures"
+
 
 def test_deserialize_ws():
-	ws = deserialize_ws(Path("fixtures/dump.ws"))
+	ws = deserialize_ws(FIXTURE_DIR / "dump.ws")
 	assert ws.url == URL("ws://example.com:63001/socket.io/?EIO=3&transport=websocket")
 	assert ws.frames == [
 		(True, "2probe"),
@@ -15,8 +17,9 @@ def test_deserialize_ws():
 		(False, b"                                       DICM"),
 	]
 
+
 def test_deserialize_http():
-	exchange = HTTPDumpFile.read_from(Path("fixtures/dump.http"))
+	exchange = HTTPDumpFile.read_from(FIXTURE_DIR / "dump.http")
 	request_body = exchange.request_body()
 	response_body = exchange.response_body()
 

@@ -1,6 +1,9 @@
 import asyncio
 import asyncio
+import os
+import shutil
 import sys
+from pathlib import Path
 from typing import Any
 
 from playwright.async_api import Frame, Page, ElementHandle, Playwright, Browser, Error, BrowserContext, WebSocket, \
@@ -9,6 +12,85 @@ from playwright.async_api import Frame, Page, ElementHandle, Playwright, Browser
 _driver_instance: Any = None
 _playwright: Playwright
 _browser: Browser
+
+
+def _runtime_search_roots():
+	roots = []
+	env_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+	if env_path:
+		roots.append(Path(env_path))
+
+	exe_dir = Path(sys.executable).resolve().parent
+	roots.append(exe_dir)
+	roots.append(exe_dir.parent / "Resources")
+
+	if hasattr(sys, "_MEIPASS"):
+		roots.append(Path(sys._MEIPASS))
+
+	roots.append(Path.home() / "Library/Caches/ms-playwright")
+	roots.append(Path.home() / ".cache/ms-playwright")
+
+	unique = []
+	for root in roots:
+		root = root.expanduser()
+		if root not in unique and root.exists():
+			unique.append(root)
+
+	return unique
+
+
+def _find_packaged_chromium():
+	patterns = []
+	if sys.platform == "darwin":
+		patterns = [
+			"ms-playwright/chromium-*/**/Chromium.app/Contents/MacOS/Chromium",
+			"chromium-*/**/Chromium.app/Contents/MacOS/Chromium",
+		]
+	elif sys.platform == "win32":
+		patterns = [
+			"ms-playwright/chromium-*/chrome-win/chrome.exe",
+			"chromium-*/chrome-win/chrome.exe",
+		]
+	else:
+		patterns = [
+			"ms-playwright/chromium-*/chrome-linux/chrome",
+			"chromium-*/chrome-linux/chrome",
+		]
+
+	candidates = []
+	for root in _runtime_search_roots():
+		for pattern in patterns:
+			candidates.extend(root.glob(pattern))
+
+	return max((path for path in candidates if path.is_file()), default=None)
+
+
+def _find_system_chromium():
+	if sys.platform == "darwin":
+		candidates = [
+			Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+			Path("/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
+			Path("/Applications/Chromium.app/Contents/MacOS/Chromium"),
+		]
+	elif sys.platform == "win32":
+		candidates = [
+			Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+			Path(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"),
+			Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
+			Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
+		]
+	else:
+		for name in ("google-chrome", "microsoft-edge", "chromium", "chromium-browser"):
+			location = shutil.which(name)
+			if location:
+				return Path(location)
+		return None
+
+	for path in candidates:
+		if path.is_file():
+			return path
+
+	return None
 
 
 async def launch_browser(playwright: Playwright) -> Browser:
@@ -21,12 +103,17 @@ async def launch_browser(playwright: Playwright) -> Browser:
 		if not e.message.startswith("BrowserType.launch: Executable doesn't exist"):
 			raise
 
-	if sys.platform == "win32":
-		print("PlayWright: 使用 Windows 自带的 Edge 浏览器。")
-		return await playwright.chromium.launch(headless=False,
-			executable_path=r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
+	executable = _find_packaged_chromium()
+	if executable:
+		print(f"PlayWright: 使用打包的 Chromium 浏览器 {executable}")
+		return await playwright.chromium.launch(headless=False, executable_path=str(executable))
 
-	raise Exception("在该系统上运行必须提供浏览器的路径。")
+	executable = _find_system_chromium()
+	if executable:
+		print(f"PlayWright: 使用系统浏览器 {executable}")
+		return await playwright.chromium.launch(headless=False, executable_path=str(executable))
+
+	raise Exception("未找到可用的 Chromium 浏览器，请先运行 playwright install chromium。")
 
 
 async def wait_text(context: Page | Frame | ElementHandle, selector: str):

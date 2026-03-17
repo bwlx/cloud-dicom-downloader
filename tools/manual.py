@@ -200,6 +200,10 @@ class WebSocketDumpFile:
 		return cls(dump_file, url, frames)
 
 
+def deserialize_ws(dump_file: Path):
+	return WebSocketDumpFile.read_from(dump_file)
+
+
 async def run(browser: Browser, url: str):
 	context = await browser.new_context()
 	waiter = asyncio.Event()

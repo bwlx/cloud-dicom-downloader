@@ -1,4 +1,5 @@
 import math
+import os
 import re
 import sys
 from base64 import b64encode
@@ -13,6 +14,8 @@ from pydicom import Dataset
 from pydicom.tag import Tag
 from pydicom.valuerep import VR, STR_VR, INT_VR, FLOAT_VR
 from tqdm import tqdm
+
+from runtime_config import DOWNLOAD_ROOT_ENV
 
 # 这儿的请求头也就意思一下，真要处理请求特征反爬还得使用自动化浏览器。
 _HEADERS = {
@@ -126,7 +129,14 @@ def suggest_save_dir(patient: str, desc: str, datetime: str):
 	"""
 	patient, desc = pathify(patient), pathify(desc)
 	datetime = TIME_SEPS.sub("", datetime)
-	return Path(f"download/{patient}-{desc}-{datetime}")
+	return get_download_root() / f"{patient}-{desc}-{datetime}"
+
+
+def get_download_root():
+	value = os.environ.get(DOWNLOAD_ROOT_ENV)
+	if value:
+		return Path(value).expanduser()
+	return Path("download")
 
 
 _filename_serial_re = re.compile(r"^(.+?) \((\d+)\)$")

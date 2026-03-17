@@ -1,38 +1,27 @@
+import argparse
 import asyncio
-import sys
 
-from yarl import URL
-
-from crawlers import szjudianyun, hinacom, cq12320, shdc, zscloud, ftimage, mtywcloud, yzhcloud, sugh, jdyfy
+from desktop_core import DownloadRequest, run_download_request
 
 
-async def main():
-	host = URL(sys.argv[1]).host
+def parse_args(argv=None):
+	parser = argparse.ArgumentParser()
+	parser.add_argument("url", help="报告链接")
+	parser.add_argument("password", nargs="?", help="需要密码的站点使用")
+	parser.add_argument("--raw", action="store_true", help="下载原始像素，仅部分站点支持")
+	parser.add_argument("--output", help="自定义下载根目录")
+	return parser.parse_args(argv)
 
-	if host.endswith(".medicalimagecloud.com"):
-		module_ = hinacom
-	elif host == "mdmis.cq12320.cn":
-		module_ = cq12320
-	elif host == "qr.szjudianyun.com":
-		module_ = szjudianyun
-	elif host == "ylyyx.shdc.org.cn":
-		module_ = shdc
-	elif host == "zscloud.zs-hospital.sh.cn":
-		module_ = zscloud
-	elif host == "app.ftimage.cn" or host == "yyx.ftimage.cn":
-		module_ = ftimage
-	elif host == "m.yzhcloud.com":
-		module_ = yzhcloud
-	elif host == "ss.mtywcloud.com":
-		module_ = mtywcloud
-	elif host == "work.sugh.net":
-		module_ = sugh
-	elif host == "cloudpacs.jdyfy.com":
-		module_ = jdyfy
-	else:
-		return print("不支持的网站，详情见 README.md")
 
-	await module_.run(*sys.argv[1:])
+async def main(argv=None):
+	args = parse_args(argv)
+	request = DownloadRequest(
+		url=args.url,
+		password=args.password,
+		raw=args.raw,
+		output_dir=args.output,
+	)
+	await run_download_request(request)
 
 
 if __name__ == "__main__":

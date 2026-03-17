@@ -1,0 +1,89 @@
+import os
+from contextlib import contextmanager
+from dataclasses import dataclass
+from pathlib import Path
+from types import ModuleType
+from typing import Iterator
+
+from yarl import URL
+
+from crawlers import cq12320, ftimage, hinacom, jdyfy, mtywcloud, shdc, sugh, szjudianyun, yzhcloud, zscloud
+from runtime_config import DOWNLOAD_ROOT_ENV
+
+
+@dataclass(slots=True)
+class DownloadRequest:
+	url: str
+	password: str | None = None
+	raw: bool = False
+	output_dir: str | None = None
+
+
+def resolve_crawler_module(url: str) -> ModuleType:
+	host = URL(url).host or ""
+
+	if host.endswith(".medicalimagecloud.com"):
+		return hinacom
+	if host == "mdmis.cq12320.cn":
+		return cq12320
+	if host == "qr.szjudianyun.com":
+		return szjudianyun
+	if host == "ylyyx.shdc.org.cn":
+		return shdc
+	if host == "zscloud.zs-hospital.sh.cn":
+		return zscloud
+	if host in {"app.ftimage.cn", "yyx.ftimage.cn"}:
+		return ftimage
+	if host == "m.yzhcloud.com":
+		return yzhcloud
+	if host == "ss.mtywcloud.com":
+		return mtywcloud
+	if host == "work.sugh.net":
+		return sugh
+	if host == "cloudpacs.jdyfy.com":
+		return jdyfy
+
+	raise ValueError("不支持的网站，详情见 README.md")
+
+
+def url_requires_password(url: str) -> bool:
+	host = URL(url).host or ""
+	return host.endswith(".medicalimagecloud.com")
+
+
+def url_supports_raw(url: str) -> bool:
+	host = URL(url).host or ""
+	return host.endswith(".medicalimagecloud.com") or host == "mdmis.cq12320.cn"
+
+
+@contextmanager
+def configured_output_dir(output_dir: str | None) -> Iterator[None]:
+	if not output_dir:
+		yield
+		return
+
+	previous = os.environ.get(DOWNLOAD_ROOT_ENV)
+	os.environ[DOWNLOAD_ROOT_ENV] = str(Path(output_dir).expanduser())
+	try:
+		yield
+	finally:
+		if previous is None:
+			os.environ.pop(DOWNLOAD_ROOT_ENV, None)
+		else:
+			os.environ[DOWNLOAD_ROOT_ENV] = previous
+
+
+async def run_download_request(request: DownloadRequest):
+	module_ = resolve_crawler_module(request.url)
+	args = [request.url]
+
+	if url_requires_password(request.url):
+		if not request.password:
+			raise ValueError("该链接所在站点需要密码。")
+		args.append(request.password)
+
+	if request.raw and url_supports_raw(request.url):
+		args.append("--raw")
+
+	with configured_output_dir(request.output_dir):
+		await module_.run(*args)

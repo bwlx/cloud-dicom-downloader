@@ -1,0 +1,94 @@
+name: Build Windows Installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+            requirements-desktop.txt
+            requirements-packaging.txt
+
+      - name: Determine build version
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $version = "${{ github.ref_name }}".TrimStart("v")
+          } else {
+            $version = "0.0.${{ github.run_number }}"
+          }
+
+          "BUILD_VERSION=$version" >> $env:GITHUB_ENV
+          "ZIP_NAME=Cloud-DICOM-Downloader-windows-$version.zip" >> $env:GITHUB_ENV
+          "SETUP_NAME=Cloud-DICOM-Downloader-Setup-$version.exe" >> $env:GITHUB_ENV
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Ensure GitHub CLI is available
+        shell: pwsh
+        run: |
+          if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+            choco install gh --no-progress -y
+          }
+          gh --version
+
+      - name: Build Windows package
+        shell: pwsh
+        run: .\build_windows.ps1 -Version $env:BUILD_VERSION
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-${{ env.BUILD_VERSION }}
+          path: |
+            dist/${{ env.ZIP_NAME }}
+            dist/${{ env.SETUP_NAME }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish release assets
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $zipPath = "dist/$env:ZIP_NAME"
+          $setupPath = "dist/$env:SETUP_NAME"
+
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag `
+              $zipPath `
+              $setupPath `
+              --verify-tag `
+              --generate-notes `
+              --repo $env:GITHUB_REPOSITORY
+          } else {
+            gh release upload $tag `
+              $zipPath `
+              $setupPath `
+              --clobber `
+              --repo $env:GITHUB_REPOSITORY
+          }
