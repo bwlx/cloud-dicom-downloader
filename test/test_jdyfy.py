@@ -3,6 +3,7 @@ from yarl import URL
 
 from crawlers.jdyfy import (
 	_looks_like_login_page,
+	_normalize_login_free_address,
 	_parse_login_free_error,
 	_parse_login_free_form,
 	_pick_login_free_study,
@@ -71,6 +72,19 @@ def test_login_free_prompt():
 	url = "https://example-hospital.invalid/Account/ViewListLoginFree/CT-ACCESSION-001?idType=accessionnumber"
 	assert requires_authority_code(url)
 	assert authority_code_prompt(url) == "手机号/身份证后四位"
+
+
+def test_short_login_free_prompt():
+	url = "https://example-hospital.invalid/r/CT-ACCESSION-001/accessionnumber"
+	assert requires_authority_code(url)
+	assert authority_code_prompt(url) == "手机号/身份证后四位"
+
+
+def test_normalize_short_login_free_address():
+	address = URL("https://example-hospital.invalid/r/CT-ACCESSION-001/accessionnumber")
+	assert str(_normalize_login_free_address(address)) == (
+		"https://example-hospital.invalid/Account/ViewListLoginFree/CT-ACCESSION-001?idType=accessionnumber"
+	)
 
 
 def test_parse_login_free_form():

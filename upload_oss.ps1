@@ -42,6 +42,13 @@ function Join-ObjectKey([string]$Prefix, [string]$Suffix) {
 	return "{0}/{1}" -f $Prefix.TrimEnd("/"), $Suffix.TrimStart("/")
 }
 
+function Invoke-Ossutil([string]$Exe, [string[]]$Args) {
+	& $Exe @Args
+	if ($LASTEXITCODE -ne 0) {
+		throw "ossutil failed with exit code $LASTEXITCODE"
+	}
+}
+
 $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ToolsDir = Join-Path $RootDir "build\ossutil"
 $OssutilVersion = "2.2.1"
@@ -76,12 +83,10 @@ if (-not $OssutilExe) {
 	throw "ossutil.exe not found after extraction."
 }
 
-$ConfigPath = Join-Path $ToolsDir ".ossutilconfig"
-$ConfigArgs = @("config", "-c", $ConfigPath, "-e", $Endpoint, "-i", $AccessKeyId, "-k", $AccessKeySecret)
+$CommonArgs = @("-e", $Endpoint, "-i", $AccessKeyId, "-k", $AccessKeySecret)
 if (-not [string]::IsNullOrWhiteSpace($StsToken)) {
-	$ConfigArgs += @("-t", $StsToken)
+	$CommonArgs += @("-t", $StsToken)
 }
-& $OssutilExe @ConfigArgs | Out-Null
 
 $SummaryLines = New-Object System.Collections.Generic.List[string]
 $VersionPrefix = Join-ObjectKey $Prefix $Version
@@ -95,7 +100,7 @@ foreach ($File in $Files) {
 	$Name = Split-Path -Leaf $File
 	$VersionKey = Join-ObjectKey $VersionPrefix $Name
 	$VersionTarget = "oss://$Bucket/$VersionKey"
-	& $OssutilExe cp $File $VersionTarget -c $ConfigPath -f | Out-Null
+	Invoke-Ossutil $OssutilExe (@("cp", $File, $VersionTarget, "-f") + $CommonArgs)
 	Write-Host "Uploaded $Name to $VersionTarget"
 
 	if (-not [string]::IsNullOrWhiteSpace($PublicBaseUrl)) {
@@ -108,7 +113,7 @@ foreach ($File in $Files) {
 	if ($UpdateLatest) {
 		$LatestKey = Join-ObjectKey $LatestPrefix $Name
 		$LatestTarget = "oss://$Bucket/$LatestKey"
-		& $OssutilExe cp $File $LatestTarget -c $ConfigPath -f | Out-Null
+		Invoke-Ossutil $OssutilExe (@("cp", $File, $LatestTarget, "-f") + $CommonArgs)
 		Write-Host "Uploaded $Name to $LatestTarget"
 	}
 }

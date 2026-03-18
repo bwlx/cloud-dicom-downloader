@@ -56,7 +56,18 @@ def _looks_like_login_page(html: str) -> bool:
 	return "/Account/LogOn" in html or "<title>登录" in html
 
 
+def _normalize_login_free_address(address: URL) -> URL:
+	if address.path.startswith("/r/"):
+		parts = [part for part in address.path.split("/") if part]
+		if len(parts) >= 3:
+			identifier = parts[1]
+			id_type = parts[2]
+			return address.origin().with_path(f"/Account/ViewListLoginFree/{identifier}").with_query({"idType": id_type})
+	return address
+
+
 def _is_login_free_link(address: URL) -> bool:
+	address = _normalize_login_free_address(address)
 	return address.path.startswith("/Account/ViewListLoginFree/")
 
 
@@ -176,7 +187,7 @@ async def _load_login_free_studies(client, address: URL, authority_code: str) ->
 
 
 async def list_login_free_ct_studies(url: str, authority_code: str) -> list[dict]:
-	address = URL(url)
+	address = _normalize_login_free_address(URL(url))
 	if not _is_login_free_link(address):
 		raise ValueError("当前链接不是免登录检查列表链接。")
 
@@ -185,12 +196,12 @@ async def list_login_free_ct_studies(url: str, authority_code: str) -> list[dict
 
 
 def build_login_free_view_image_url(url: str, study: dict) -> str:
-	address = URL(url)
+	address = _normalize_login_free_address(URL(url))
 	return f"{address.origin()}/Study/ViewImage?studyId={study['Id']}"
 
 
 async def run(share_url, *args):
-	address = URL(share_url)
+	address = _normalize_login_free_address(URL(share_url))
 	password = args[0] if args and not args[0].startswith("--") else None
 	raw = "--raw" in args
 
