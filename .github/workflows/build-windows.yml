@@ -59,9 +59,11 @@ jobs:
           $enabled = $hasBucket -and $hasEndpoint -and ($hasOidc -or $hasAkSk)
 
           "OSS_UPLOAD_ENABLED=$($enabled.ToString().ToLowerInvariant())" >> $env:GITHUB_ENV
+          "OSS_USE_OIDC=$($hasOidc.ToString().ToLowerInvariant())" >> $env:GITHUB_ENV
+          "OSS_USE_ACCESS_KEY=$($hasAkSk.ToString().ToLowerInvariant())" >> $env:GITHUB_ENV
 
       - name: Configure Alibaba Cloud credentials
-        if: env.OSS_UPLOAD_ENABLED == 'true' && secrets.ALIYUN_OIDC_PROVIDER_ARN != '' && secrets.ALIYUN_ROLE_TO_ASSUME != ''
+        if: env.OSS_UPLOAD_ENABLED == 'true' && env.OSS_USE_OIDC == 'true'
         id: aliyun-creds
         uses: aliyun/configure-aliyun-credentials-action@v1
         with:
