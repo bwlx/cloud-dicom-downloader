@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from desktop_core import DownloadRequest, run_download_request, url_requires_password, url_supports_raw
+from desktop_qr import decode_qr_image, pick_share_url
 from runtime_config import DOWNLOAD_ROOT_ENV
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -117,6 +118,9 @@ class MainWindow(QMainWindow):
 		self.url_edit.setPlaceholderText("粘贴报告链接")
 		self.url_edit.textChanged.connect(self._update_url_state)
 
+		scan_button = QPushButton("选择图片扫码")
+		scan_button.clicked.connect(self._scan_qr_from_image)
+
 		self.password_edit = QLineEdit()
 		self.password_edit.setPlaceholderText("该站点需要密码时填写")
 		self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
@@ -134,7 +138,8 @@ class MainWindow(QMainWindow):
 		self.site_hint.setWordWrap(True)
 
 		form_layout.addWidget(QLabel("报告链接"), 0, 0)
-		form_layout.addWidget(self.url_edit, 0, 1, 1, 2)
+		form_layout.addWidget(self.url_edit, 0, 1)
+		form_layout.addWidget(scan_button, 0, 2)
 		form_layout.addWidget(QLabel("访问密码"), 1, 0)
 		form_layout.addWidget(self.password_edit, 1, 1, 1, 2)
 		form_layout.addWidget(self.raw_check, 2, 1, 1, 2)
@@ -283,6 +288,31 @@ class MainWindow(QMainWindow):
 		if directory:
 			self.output_edit.setText(directory)
 
+	def _scan_qr_from_image(self):
+		path, _ = QFileDialog.getOpenFileName(
+			self,
+			"选择报告图片",
+			"",
+			"Images (*.png *.jpg *.jpeg *.bmp *.webp *.tif *.tiff);;All Files (*)",
+		)
+		if not path:
+			return
+
+		try:
+			payloads = decode_qr_image(path)
+		except Exception as exc:
+			QMessageBox.warning(self, "扫码失败", str(exc))
+			return
+
+		url = pick_share_url(payloads)
+		if not url:
+			QMessageBox.information(self, "未识别到链接", "图片中没有识别到可用的二维码链接。")
+			return
+
+		self.url_edit.setText(url)
+		self.status_label.setText("已从图片识别链接")
+		self._append_log_text(f"已从图片识别到链接：{url}\n")
+
 	def _update_url_state(self):
 		url = self.url_edit.text().strip()
 		password_required = False
@@ -355,6 +385,8 @@ class MainWindow(QMainWindow):
 
 		env = QProcessEnvironment.systemEnvironment()
 		env.insert("PYTHONUNBUFFERED", "1")
+		env.insert("PYTHONUTF8", "1")
+		env.insert("PYTHONIOENCODING", "utf-8")
 		env.insert(DOWNLOAD_ROOT_ENV, output_dir)
 		process.setProcessEnvironment(env)
 

@@ -22,10 +22,14 @@ def _runtime_search_roots():
 
 	exe_dir = Path(sys.executable).resolve().parent
 	roots.append(exe_dir)
+	roots.append(exe_dir / "_internal")
 	roots.append(exe_dir.parent / "Resources")
+	roots.append(exe_dir.parent / "Resources" / "_internal")
 
 	if hasattr(sys, "_MEIPASS"):
-		roots.append(Path(sys._MEIPASS))
+		meipass = Path(sys._MEIPASS)
+		roots.append(meipass)
+		roots.append(meipass / "_internal")
 
 	roots.append(Path.home() / "Library/Caches/ms-playwright")
 	roots.append(Path.home() / ".cache/ms-playwright")

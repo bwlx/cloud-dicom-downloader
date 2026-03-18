@@ -30,6 +30,27 @@ def _get_save_dir(ds):
 	return suggest_save_dir(ds["patientName"], ds["studyDescription"], ds["studyDate"])
 
 
+def _parse_viewer_vars(html: str) -> tuple[str, str, str, str]:
+	values = {name: value for name, value in _VAR_RE.findall(html)}
+	try:
+		return (
+			values["STUDY_ID"],
+			values["ACCESSION_NUMBER"],
+			values["STUDY_EXAM_UID"],
+			values["LOAD_IMAGE_CACHE_KEY"],
+		)
+	except KeyError as exc:
+		if "/Account/LogOn" in html or "<title>登录</title>" in html:
+			raise ValueError("影像查看页需要登录，当前链接不能直接匿名下载。请改用可直接访问的影像分享链接。") from exc
+		raise ValueError("无法从影像查看页提取下载参数，站点页面结构可能已变化。") from exc
+
+
+def _require_match(match, message: str):
+	if match:
+		return match
+	raise ValueError(message)
+
+
 class HinacomDownloader:
 	"""
 	海纳医信医疗影像系统的下载器，该系统在中国的多个地区被采用。
@@ -119,11 +140,7 @@ class HinacomDownloader:
 		"""
 		async with client.get(viewer_url) as response:
 			html4 = await response.text()
-			matches = _VAR_RE.findall(html4)
-			top_study_id = matches[0][1]
-			accession_number = matches[1][1]
-			exam_uid = matches[2][1]
-			cache_key = matches[3][1]
+			top_study_id, accession_number, exam_uid, cache_key = _parse_viewer_vars(html4)
 
 			# 查看器可能被整合进了其它系统里，路径有前缀。
 			origin, path = response.real_url.origin(), response.real_url.path
@@ -153,14 +170,20 @@ class HinacomDownloader:
 		"""
 		async with client.get(redirect_url) as response:
 			html2 = await response.text()
-			matches = _LINK_ENTRY.search(html2)
+			matches = _require_match(
+				_LINK_ENTRY.search(html2),
+				"查看影像入口页里没有找到跳转地址，站点页面结构可能已变化。",
+			)
 
 		# 典型 URL: http://<domain>/entry/viewimage?token=<base64>
 		# 中间不知道为什么又要跳转一次，端口还变了。
 		async with client.get(matches.group(1)) as response:
 			html3 = await response.text("utf-8")
 			client._base_url = response.real_url.origin()
-			viewer_url = _TARGET_PATH.search(html3).group(1)
+			viewer_url = _require_match(
+				_TARGET_PATH.search(html3),
+				"影像入口跳转页里没有找到最终查看器地址，站点页面结构可能已变化。",
+			).group(1)
 
 		return await HinacomDownloader.from_url(client, viewer_url)
 

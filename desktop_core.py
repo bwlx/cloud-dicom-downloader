@@ -40,7 +40,7 @@ def resolve_crawler_module(url: str) -> ModuleType:
 		return mtywcloud
 	if host == "work.sugh.net":
 		return sugh
-	if host == "cloudpacs.jdyfy.com":
+	if host in {"cloudpacs.jdyfy.com", "cyemis.bjcyh.mobi"}:
 		return jdyfy
 
 	raise ValueError("不支持的网站，详情见 README.md")
