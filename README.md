@@ -113,7 +113,7 @@ python -m pip install --upgrade pip
 - 缓存 pip 依赖
 - 安装 Inno Setup
 - 执行 `build_windows.ps1`
-- 上传 zip 和安装包为 workflow artifact
+- 分别上传安装包和便携版为 workflow artifact
 
 当触发来源是 tag 时，还会自动创建或更新 GitHub Release，并上传：
 
@@ -126,6 +126,33 @@ python -m pip install --upgrade pip
 git tag v0.1.0
 git push origin v0.1.0
 ```
+
+### GitHub Actions 上传到 OSS
+
+Windows 工作流现在支持在构建完成后把产物额外上传到阿里云 OSS，适合国内分发。
+
+先在 GitHub 仓库配置变量：
+
+- `ALIYUN_OSS_BUCKET`：目标 Bucket 名
+- `ALIYUN_OSS_ENDPOINT`：Bucket Endpoint，例如 `https://oss-cn-hangzhou.aliyuncs.com`
+- `ALIYUN_OSS_PREFIX`：可选，对象前缀，例如 `cloud-dicom-downloader/windows`
+- `ALIYUN_OSS_PUBLIC_BASE_URL`：可选，公开访问域名或 CDN 域名，用于 workflow summary 生成直链
+
+鉴权二选一即可：
+
+- OIDC：`ALIYUN_OIDC_PROVIDER_ARN`、`ALIYUN_ROLE_TO_ASSUME`
+- AccessKey：`ALIYUN_ACCESS_KEY_ID`、`ALIYUN_ACCESS_KEY_SECRET`
+
+可选：
+
+- `ALIYUN_STS_TOKEN`：如果你使用的是临时凭证
+
+上传规则：
+
+- 每次构建上传到 `oss://<bucket>/<prefix>/<version>/`
+- tag 构建额外覆盖 `oss://<bucket>/<prefix>/latest/`
+
+如果没有配置这些变量和 secrets，workflow 会自动跳过 OSS 上传。
 
 ### Windows 兼容性说明
 
@@ -228,3 +255,11 @@ URL 格式为`https://work.sugh.net:8002/pc/auth-viewer?clinicalShareToken=<toke
 ```
 python downloader.py <url>
 ```
+
+### cyemis.bjcyh.mobi
+
+URL 格式为 `https://cyemis.bjcyh.mobi:8082/Study/ViewImage?studyId=<studyId>`
+
+### cyemis.bjcyh.mobi
+
+URL 格式为 `https://cyemis.bjcyh.mobi:8082/Study/ViewImage?studyId=<studyId>`

@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   build-windows:
@@ -41,6 +42,33 @@ jobs:
           "ZIP_NAME=Cloud-DICOM-Downloader-windows-$version.zip" >> $env:GITHUB_ENV
           "SETUP_NAME=Cloud-DICOM-Downloader-Setup-$version.exe" >> $env:GITHUB_ENV
 
+      - name: Detect OSS upload configuration
+        shell: pwsh
+        env:
+          OSS_BUCKET: ${{ vars.ALIYUN_OSS_BUCKET }}
+          OSS_ENDPOINT: ${{ vars.ALIYUN_OSS_ENDPOINT }}
+          OIDC_PROVIDER_ARN: ${{ secrets.ALIYUN_OIDC_PROVIDER_ARN }}
+          ROLE_TO_ASSUME: ${{ secrets.ALIYUN_ROLE_TO_ASSUME }}
+          ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
+          ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
+        run: |
+          $hasBucket = -not [string]::IsNullOrWhiteSpace($env:OSS_BUCKET)
+          $hasEndpoint = -not [string]::IsNullOrWhiteSpace($env:OSS_ENDPOINT)
+          $hasOidc = (-not [string]::IsNullOrWhiteSpace($env:OIDC_PROVIDER_ARN)) -and (-not [string]::IsNullOrWhiteSpace($env:ROLE_TO_ASSUME))
+          $hasAkSk = (-not [string]::IsNullOrWhiteSpace($env:ACCESS_KEY_ID)) -and (-not [string]::IsNullOrWhiteSpace($env:ACCESS_KEY_SECRET))
+          $enabled = $hasBucket -and $hasEndpoint -and ($hasOidc -or $hasAkSk)
+
+          "OSS_UPLOAD_ENABLED=$($enabled.ToString().ToLowerInvariant())" >> $env:GITHUB_ENV
+
+      - name: Configure Alibaba Cloud credentials
+        if: env.OSS_UPLOAD_ENABLED == 'true' && secrets.ALIYUN_OIDC_PROVIDER_ARN != '' && secrets.ALIYUN_ROLE_TO_ASSUME != ''
+        id: aliyun-creds
+        uses: aliyun/configure-aliyun-credentials-action@v1
+        with:
+          oidc-provider-arn: ${{ secrets.ALIYUN_OIDC_PROVIDER_ARN }}
+          role-to-assume: ${{ secrets.ALIYUN_ROLE_TO_ASSUME }}
+          role-session-name: github-action-session
+
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress -y
@@ -60,12 +88,41 @@ jobs:
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: windows-installer-${{ env.BUILD_VERSION }}
-          path: |
-            dist/${{ env.ZIP_NAME }}
-            dist/${{ env.SETUP_NAME }}
+          name: windows-setup-${{ env.BUILD_VERSION }}
+          path: dist/${{ env.SETUP_NAME }}
           if-no-files-found: error
           retention-days: 14
+
+      - name: Upload portable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-portable-${{ env.BUILD_VERSION }}
+          path: dist/${{ env.ZIP_NAME }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload packages to OSS
+        if: env.OSS_UPLOAD_ENABLED == 'true'
+        shell: pwsh
+        env:
+          ALIYUN_OSS_BUCKET: ${{ vars.ALIYUN_OSS_BUCKET }}
+          ALIYUN_OSS_ENDPOINT: ${{ vars.ALIYUN_OSS_ENDPOINT }}
+          ALIYUN_OSS_PREFIX: ${{ vars.ALIYUN_OSS_PREFIX }}
+          ALIYUN_OSS_PUBLIC_BASE_URL: ${{ vars.ALIYUN_OSS_PUBLIC_BASE_URL }}
+          ALIYUN_ACCESS_KEY_ID: ${{ steps.aliyun-creds.outputs['aliyun-access-key-id'] || secrets.ALIYUN_ACCESS_KEY_ID }}
+          ALIYUN_ACCESS_KEY_SECRET: ${{ steps.aliyun-creds.outputs['aliyun-access-key-secret'] || secrets.ALIYUN_ACCESS_KEY_SECRET }}
+          ALIYUN_STS_TOKEN: ${{ steps.aliyun-creds.outputs['aliyun-security-token'] || secrets.ALIYUN_STS_TOKEN }}
+        run: |
+          $files = @(
+            "dist/$env:SETUP_NAME",
+            "dist/$env:ZIP_NAME"
+          )
+
+          if ("${{ github.ref_type }}" -eq "tag") {
+            .\upload_oss.ps1 -Version $env:BUILD_VERSION -Files $files -UpdateLatest
+          } else {
+            .\upload_oss.ps1 -Version $env:BUILD_VERSION -Files $files
+          }
 
       - name: Publish release assets
         if: github.ref_type == 'tag'
