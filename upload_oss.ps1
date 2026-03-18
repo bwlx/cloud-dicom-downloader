@@ -90,9 +90,9 @@ foreach ($File in $Files) {
 
 	if (-not [string]::IsNullOrWhiteSpace($PublicBaseUrl)) {
 		$Base = $PublicBaseUrl.TrimEnd("/")
-		$SummaryLines.Add("- $Name: $Base/$VersionKey")
+		$SummaryLines.Add(("- {0}: {1}/{2}" -f $Name, $Base, $VersionKey))
 	} else {
-		$SummaryLines.Add("- $Name: $VersionTarget")
+		$SummaryLines.Add(("- {0}: {1}" -f $Name, $VersionTarget))
 	}
 
 	if ($UpdateLatest) {

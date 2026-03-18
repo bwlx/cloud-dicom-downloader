@@ -118,7 +118,7 @@ class MainWindow(QMainWindow):
 		self.url_edit.setPlaceholderText("粘贴报告链接")
 		self.url_edit.textChanged.connect(self._update_url_state)
 
-		scan_button = QPushButton("选择图片扫码")
+		scan_button = QPushButton("选择图片扫码或直接输入链接")
 		scan_button.clicked.connect(self._scan_qr_from_image)
 
 		self.password_edit = QLineEdit()
