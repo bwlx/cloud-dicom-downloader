@@ -7,7 +7,7 @@ from typing import Iterator
 
 from yarl import URL
 
-from crawlers import cq12320, ftimage, hinacom, jdyfy, mtywcloud, shdc, sugh, szjudianyun, yzhcloud, zscloud
+from crawlers import cq12320, ftimage, hinacom, jdyfy, medapi, mtywcloud, shdc, sugh, szjudianyun, yzhcloud, zscloud
 from runtime_config import DOWNLOAD_ROOT_ENV
 
 
@@ -42,6 +42,8 @@ def resolve_crawler_module(url: str) -> ModuleType:
 		return sugh
 	if host in {"cloudpacs.jdyfy.com", "cyemis.bjcyh.mobi"}:
 		return jdyfy
+	if host == "medapi.dsrmyy.cn":
+		return medapi
 
 	raise ValueError("不支持的网站，详情见 README.md")
 

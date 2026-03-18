@@ -257,6 +257,13 @@ URL 格式为`https://work.sugh.net:8002/pc/auth-viewer?clinicalShareToken=<toke
 python downloader.py <url>
 ```
 
+### medapi.dsrmyy.cn
+
+支持以下分享入口：
+
+- `http://medapi.dsrmyy.cn:9088/s/<share_sid>`
+- `http://medapi.dsrmyy.cn:9088/sharevisit/mobile/digitalimage/index?sid=<share_sid>`
+
 ### cyemis.bjcyh.mobi
 
 URL 格式为 `https://cyemis.bjcyh.mobi:8082/Study/ViewImage?studyId=<studyId>`
