@@ -9,12 +9,15 @@ from PySide6.QtGui import QDesktopServices, QFont, QTextCursor
 from PySide6.QtWidgets import (
 	QApplication,
 	QCheckBox,
+	QDialog,
+	QDialogButtonBox,
 	QFileDialog,
 	QGridLayout,
 	QGroupBox,
 	QHBoxLayout,
 	QLabel,
 	QLineEdit,
+	QListWidget,
 	QMainWindow,
 	QMessageBox,
 	QPlainTextEdit,
@@ -24,8 +27,9 @@ from PySide6.QtWidgets import (
 	QWidget,
 )
 
-from desktop_core import DownloadRequest, run_download_request, url_requires_password, url_supports_raw
+from desktop_core import DownloadRequest, run_download_request, url_password_prompt, url_requires_password, url_supports_raw
 from desktop_qr import decode_qr_image, pick_share_url
+from crawlers import jdyfy
 from runtime_config import DOWNLOAD_ROOT_ENV
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -80,6 +84,51 @@ def worker_entry(argv: list[str]) -> int:
 	return 0
 
 
+def format_study_option(study: dict) -> str:
+	parts = [
+		str(study.get("AccessionNumber") or "").strip(),
+		str(study.get("ExamDate") or "").strip(),
+		str(study.get("BodyPart") or "").strip(),
+		str(study.get("StudyDescription") or "").strip(),
+	]
+	return " | ".join(part for part in parts if part)
+
+
+class StudySelectionDialog(QDialog):
+	def __init__(self, studies: list[dict], parent=None):
+		super().__init__(parent)
+		self.studies = studies
+		self.setWindowTitle("选择 CT 检查")
+		self.resize(760, 320)
+
+		layout = QVBoxLayout(self)
+		layout.setContentsMargins(16, 16, 16, 16)
+		layout.setSpacing(12)
+
+		label = QLabel("发现多个 CT 检查，请选择需要下载的项目。")
+		label.setWordWrap(True)
+
+		self.list_widget = QListWidget()
+		for study in studies:
+			self.list_widget.addItem(format_study_option(study))
+		self.list_widget.setCurrentRow(0)
+		self.list_widget.itemDoubleClicked.connect(lambda *_: self.accept())
+
+		buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+		buttons.accepted.connect(self.accept)
+		buttons.rejected.connect(self.reject)
+
+		layout.addWidget(label)
+		layout.addWidget(self.list_widget, 1)
+		layout.addWidget(buttons)
+
+	def selected_study(self) -> dict | None:
+		row = self.list_widget.currentRow()
+		if row < 0:
+			return None
+		return self.studies[row]
+
+
 class MainWindow(QMainWindow):
 	def __init__(self):
 		super().__init__()
@@ -122,7 +171,7 @@ class MainWindow(QMainWindow):
 		scan_button.clicked.connect(self._scan_qr_from_image)
 
 		self.password_edit = QLineEdit()
-		self.password_edit.setPlaceholderText("该站点需要密码时填写")
+		self.password_edit.setPlaceholderText("该站点需要凭证时填写")
 		self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
 
 		self.raw_check = QCheckBox("下载原始像素（仅支持海纳医信相关站点）")
@@ -140,7 +189,8 @@ class MainWindow(QMainWindow):
 		form_layout.addWidget(QLabel("报告链接"), 0, 0)
 		form_layout.addWidget(self.url_edit, 0, 1)
 		form_layout.addWidget(scan_button, 0, 2)
-		form_layout.addWidget(QLabel("访问密码"), 1, 0)
+		self.password_label = QLabel("访问凭证")
+		form_layout.addWidget(self.password_label, 1, 0)
 		form_layout.addWidget(self.password_edit, 1, 1, 1, 2)
 		form_layout.addWidget(self.raw_check, 2, 1, 1, 2)
 		form_layout.addWidget(QLabel("保存目录"), 3, 0)
@@ -316,17 +366,22 @@ class MainWindow(QMainWindow):
 	def _update_url_state(self):
 		url = self.url_edit.text().strip()
 		password_required = False
+		password_prompt = None
 		raw_supported = False
 
 		if url:
 			try:
 				password_required = url_requires_password(url)
+				password_prompt = url_password_prompt(url)
 				raw_supported = url_supports_raw(url)
 			except Exception:
 				self.site_hint.setText("链接暂时无法识别，请检查是否完整。")
 			else:
 				if password_required:
-					self.site_hint.setText("该站点需要访问密码。")
+					if password_prompt == "手机号/身份证后四位":
+						self.site_hint.setText("该链接需要填写手机号或身份证后四位，程序会自动从列表中选择 CT 检查。")
+					else:
+						self.site_hint.setText("该站点需要访问密码。")
 				elif raw_supported:
 					self.site_hint.setText("该站点支持原始像素下载。")
 				else:
@@ -335,6 +390,14 @@ class MainWindow(QMainWindow):
 			self.site_hint.setText("支持直接粘贴医疗影像报告链接。")
 
 		self.password_edit.setEnabled(password_required)
+		if password_prompt == "手机号/身份证后四位":
+			self.password_label.setText("后四位")
+			self.password_edit.setPlaceholderText("填写手机号或身份证后四位")
+			self.password_edit.setEchoMode(QLineEdit.EchoMode.Normal)
+		else:
+			self.password_label.setText("访问凭证")
+			self.password_edit.setPlaceholderText("该站点需要凭证时填写")
+			self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
 		if not password_required:
 			self.password_edit.clear()
 
@@ -355,12 +418,16 @@ class MainWindow(QMainWindow):
 			return
 		try:
 			password_required = url_requires_password(url)
+			password_prompt = url_password_prompt(url)
 		except Exception:
 			QMessageBox.warning(self, "参数错误", "报告链接格式不正确。")
 			return
 
 		if password_required and not password:
-			QMessageBox.warning(self, "参数错误", "该站点需要访问密码。")
+			if password_prompt == "手机号/身份证后四位":
+				QMessageBox.warning(self, "参数错误", "该链接需要填写手机号或身份证后四位。")
+			else:
+				QMessageBox.warning(self, "参数错误", "该站点需要访问密码。")
 			return
 
 		request = DownloadRequest(
@@ -369,8 +436,19 @@ class MainWindow(QMainWindow):
 			raw=self.raw_check.isChecked(),
 			output_dir=output_dir,
 		)
+		try:
+			request, selection_label = self._prepare_request(request)
+		except Exception as exc:
+			QMessageBox.warning(self, "参数错误", str(exc))
+			self.status_label.setText("待开始")
+			return
+		if request is None:
+			self.status_label.setText("已取消")
+			return
 
 		self.log_edit.clear()
+		if selection_label:
+			self._append_log_text(f"已选择检查：{selection_label}\n")
 		self.current_output_path = None
 		self.open_button.setEnabled(False)
 		self.status_label.setText("任务启动中")
@@ -413,6 +491,31 @@ class MainWindow(QMainWindow):
 			process.deleteLater()
 			self.process = None
 			return
+
+	def _prepare_request(self, request: DownloadRequest) -> tuple[DownloadRequest | None, str | None]:
+		if not request.password or not jdyfy.requires_authority_code(request.url):
+			return request, None
+
+		self.status_label.setText("正在读取检查列表")
+		QApplication.processEvents()
+		studies = asyncio.run(jdyfy.list_login_free_ct_studies(request.url, request.password))
+		if len(studies) == 1:
+			study = studies[0]
+		else:
+			dialog = StudySelectionDialog(studies, self)
+			if dialog.exec() != QDialog.DialogCode.Accepted:
+				return None, None
+			study = dialog.selected_study()
+			if not study:
+				return None, None
+
+		study_label = format_study_option(study)
+		return DownloadRequest(
+			url=jdyfy.build_login_free_view_image_url(request.url, study),
+			password=None,
+			raw=request.raw,
+			output_dir=request.output_dir,
+		), study_label
 
 	def _append_log_text(self, text: str):
 		cleaned = text.replace("\r", "\n")

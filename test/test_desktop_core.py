@@ -1,6 +1,6 @@
 import pytest
 
-from desktop_core import resolve_crawler_module, url_requires_password, url_supports_raw
+from desktop_core import resolve_crawler_module, url_password_prompt, url_requires_password, url_supports_raw
 
 
 @pytest.mark.parametrize(
@@ -18,7 +18,14 @@ def test_resolve_crawler_module(url, module_name):
 
 def test_password_requirement():
 	assert url_requires_password("https://foo.medicalimagecloud.com/t/abc")
+	assert url_requires_password("https://example-hospital.invalid/Account/ViewListLoginFree/CT-ACCESSION-001?idType=accessionnumber")
 	assert not url_requires_password("https://mdmis.cq12320.cn/wcs1/mdmis-app/h5/#/share/detail?share_id=a&content=b")
+
+
+def test_password_prompt():
+	assert url_password_prompt("https://foo.medicalimagecloud.com/t/abc") == "访问密码"
+	assert url_password_prompt("https://example-hospital.invalid/Account/ViewListLoginFree/CT-ACCESSION-001?idType=accessionnumber") == "手机号/身份证后四位"
+	assert url_password_prompt("https://mdmis.cq12320.cn/wcs1/mdmis-app/h5/#/share/detail?share_id=a&content=b") is None
 
 
 def test_raw_support():

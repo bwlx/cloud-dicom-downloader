@@ -48,7 +48,14 @@ def resolve_crawler_module(url: str) -> ModuleType:
 
 def url_requires_password(url: str) -> bool:
 	host = URL(url).host or ""
-	return host.endswith(".medicalimagecloud.com")
+	return host.endswith(".medicalimagecloud.com") or jdyfy.requires_authority_code(url)
+
+
+def url_password_prompt(url: str) -> str | None:
+	host = URL(url).host or ""
+	if host.endswith(".medicalimagecloud.com"):
+		return "访问密码"
+	return jdyfy.authority_code_prompt(url)
 
 
 def url_supports_raw(url: str) -> bool:
@@ -79,7 +86,7 @@ async def run_download_request(request: DownloadRequest):
 
 	if url_requires_password(request.url):
 		if not request.password:
-			raise ValueError("该链接所在站点需要密码。")
+			raise ValueError(f"该链接需要填写{url_password_prompt(request.url) or '访问凭证'}。")
 		args.append(request.password)
 
 	if request.raw and url_supports_raw(request.url):

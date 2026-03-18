@@ -10,10 +10,20 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-function Require-Env([string]$Name) {
-	$Value = [Environment]::GetEnvironmentVariable($Name)
+function Get-EnvAny([string[]]$Names) {
+	foreach ($Name in $Names) {
+		$Value = [Environment]::GetEnvironmentVariable($Name)
+		if (-not [string]::IsNullOrWhiteSpace($Value)) {
+			return $Value
+		}
+	}
+	return $null
+}
+
+function Require-EnvAny([string[]]$Names) {
+	$Value = Get-EnvAny $Names
 	if ([string]::IsNullOrWhiteSpace($Value)) {
-		throw "Missing required environment variable: $Name"
+		throw "Missing required environment variable: $($Names -join ' / ')"
 	}
 	return $Value
 }
@@ -38,11 +48,11 @@ $OssutilVersion = "2.2.1"
 $OssutilZip = Join-Path $ToolsDir "ossutil-$OssutilVersion-windows-amd64.zip"
 $OssutilDir = Join-Path $ToolsDir "ossutil-$OssutilVersion-windows-amd64"
 
-$Bucket = Require-Env "ALIYUN_OSS_BUCKET"
-$Endpoint = Require-Env "ALIYUN_OSS_ENDPOINT"
-$AccessKeyId = Require-Env "ALIYUN_ACCESS_KEY_ID"
-$AccessKeySecret = Require-Env "ALIYUN_ACCESS_KEY_SECRET"
-$StsToken = [Environment]::GetEnvironmentVariable("ALIYUN_STS_TOKEN")
+$Bucket = Require-EnvAny @("ALIYUN_OSS_BUCKET")
+$Endpoint = Require-EnvAny @("ALIYUN_OSS_ENDPOINT")
+$AccessKeyId = Require-EnvAny @("ALIYUN_ACCESS_KEY_ID", "ALIBABA_CLOUD_ACCESS_KEY_ID")
+$AccessKeySecret = Require-EnvAny @("ALIYUN_ACCESS_KEY_SECRET", "ALIBABA_CLOUD_ACCESS_KEY_SECRET")
+$StsToken = Get-EnvAny @("ALIYUN_STS_TOKEN", "ALIBABA_CLOUD_SECURITY_TOKEN")
 $Prefix = Normalize-Prefix([Environment]::GetEnvironmentVariable("ALIYUN_OSS_PREFIX"))
 $PublicBaseUrl = [Environment]::GetEnvironmentVariable("ALIYUN_OSS_PUBLIC_BASE_URL")
 
