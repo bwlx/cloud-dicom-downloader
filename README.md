@@ -135,6 +135,7 @@ Windows 工作流现在支持在构建完成后把产物额外上传到阿里云
 
 - `ALIYUN_OSS_BUCKET`：目标 Bucket 名
 - `ALIYUN_OSS_ENDPOINT`：Bucket Endpoint，例如 `https://oss-cn-hangzhou.aliyuncs.com`
+- `ALIYUN_OSS_REGION`：可选，Bucket 所在地域，例如 `cn-hangzhou`。如果 `Endpoint` 形如 `oss-cn-hangzhou.aliyuncs.com`，脚本也会自动推导
 - `ALIYUN_OSS_PREFIX`：可选，对象前缀，例如 `cloud-dicom-downloader/windows`
 - `ALIYUN_OSS_PUBLIC_BASE_URL`：可选，公开访问域名或 CDN 域名，用于 workflow summary 生成直链
 

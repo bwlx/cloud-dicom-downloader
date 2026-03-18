@@ -42,10 +42,30 @@ function Join-ObjectKey([string]$Prefix, [string]$Suffix) {
 	return "{0}/{1}" -f $Prefix.TrimEnd("/"), $Suffix.TrimStart("/")
 }
 
-function Invoke-Ossutil([string]$Exe, [string[]]$Args) {
-	& $Exe @Args
+function Resolve-Region([string]$Endpoint, [string]$ExplicitRegion) {
+	if (-not [string]::IsNullOrWhiteSpace($ExplicitRegion)) {
+		return $ExplicitRegion
+	}
+
+	$Match = [regex]::Match($Endpoint, 'oss-([a-z0-9-]+)\.aliyuncs\.com')
+	if ($Match.Success) {
+		return $Match.Groups[1].Value
+	}
+
+	throw "Missing ALIYUN_OSS_REGION and unable to derive region from endpoint: $Endpoint"
+}
+
+function Invoke-Ossutil([string]$Exe, [string[]]$CommandArgs) {
+	$Output = & $Exe @CommandArgs 2>&1
+	$Text = ($Output | Out-String)
+	if ($Text) {
+		Write-Host $Text.TrimEnd()
+	}
 	if ($LASTEXITCODE -ne 0) {
 		throw "ossutil failed with exit code $LASTEXITCODE"
+	}
+	if ($Text -match 'Usage:\s+ossutil \[command\]') {
+		throw "ossutil did not execute the requested command. Check region/endpoint/credential configuration."
 	}
 }
 
@@ -60,6 +80,7 @@ $Endpoint = Require-EnvAny @("ALIYUN_OSS_ENDPOINT")
 $AccessKeyId = Require-EnvAny @("ALIYUN_ACCESS_KEY_ID", "ALIBABA_CLOUD_ACCESS_KEY_ID")
 $AccessKeySecret = Require-EnvAny @("ALIYUN_ACCESS_KEY_SECRET", "ALIBABA_CLOUD_ACCESS_KEY_SECRET")
 $StsToken = Get-EnvAny @("ALIYUN_STS_TOKEN", "ALIBABA_CLOUD_SECURITY_TOKEN")
+$Region = Resolve-Region $Endpoint (Get-EnvAny @("ALIYUN_OSS_REGION", "OSS_REGION"))
 $Prefix = Normalize-Prefix([Environment]::GetEnvironmentVariable("ALIYUN_OSS_PREFIX"))
 $PublicBaseUrl = [Environment]::GetEnvironmentVariable("ALIYUN_OSS_PUBLIC_BASE_URL")
 
@@ -83,9 +104,14 @@ if (-not $OssutilExe) {
 	throw "ossutil.exe not found after extraction."
 }
 
-$CommonArgs = @("-e", $Endpoint, "-i", $AccessKeyId, "-k", $AccessKeySecret)
+$env:OSS_ACCESS_KEY_ID = $AccessKeyId
+$env:OSS_ACCESS_KEY_SECRET = $AccessKeySecret
+$env:OSS_ENDPOINT = $Endpoint
+$env:OSS_REGION = $Region
 if (-not [string]::IsNullOrWhiteSpace($StsToken)) {
-	$CommonArgs += @("-t", $StsToken)
+	$env:OSS_SESSION_TOKEN = $StsToken
+} else {
+	$env:OSS_SESSION_TOKEN = ""
 }
 
 $SummaryLines = New-Object System.Collections.Generic.List[string]
@@ -100,7 +126,7 @@ foreach ($File in $Files) {
 	$Name = Split-Path -Leaf $File
 	$VersionKey = Join-ObjectKey $VersionPrefix $Name
 	$VersionTarget = "oss://$Bucket/$VersionKey"
-	Invoke-Ossutil $OssutilExe (@("cp", $File, $VersionTarget, "-f") + $CommonArgs)
+	Invoke-Ossutil $OssutilExe @("cp", $File, $VersionTarget, "-f")
 	Write-Host "Uploaded $Name to $VersionTarget"
 
 	if (-not [string]::IsNullOrWhiteSpace($PublicBaseUrl)) {
@@ -113,7 +139,7 @@ foreach ($File in $Files) {
 	if ($UpdateLatest) {
 		$LatestKey = Join-ObjectKey $LatestPrefix $Name
 		$LatestTarget = "oss://$Bucket/$LatestKey"
-		Invoke-Ossutil $OssutilExe (@("cp", $File, $LatestTarget, "-f") + $CommonArgs)
+		Invoke-Ossutil $OssutilExe @("cp", $File, $LatestTarget, "-f")
 		Write-Host "Uploaded $Name to $LatestTarget"
 	}
 }
