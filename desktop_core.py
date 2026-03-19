@@ -7,7 +7,7 @@ from typing import Iterator
 
 from yarl import URL
 
-from crawlers import cq12320, ftimage, hinacom, jdyfy, medapi, mtywcloud, shdc, sugh, szjudianyun, ydyy, yzhcloud, zscloud
+from crawlers import cq12320, ftimage, hinacom, jdyfy, medapi, mtywcloud, shdc, sugh, szjudianyun, ydyy, yzhcloud, zscloud, wehzsy
 from runtime_config import DOWNLOAD_ROOT_ENV
 
 
@@ -44,6 +44,8 @@ def resolve_crawler_module(url: str) -> ModuleType:
 		return jdyfy
 	if host == "medapi.dsrmyy.cn":
 		return medapi
+	if host == "cloud.wehzsy.com":
+		return wehzsy
 	if host == "pacs.ydyy.cn":
 		return ydyy
 
