@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 )
 
 from desktop_core import DownloadRequest, run_download_request, url_password_prompt, url_requires_password, url_supports_raw
+from desktop_encoding import ProcessOutputBuffer
 from desktop_qr import decode_qr_image, pick_share_url
 from crawlers import jdyfy
 from runtime_config import DOWNLOAD_ROOT_ENV
@@ -138,6 +139,8 @@ class MainWindow(QMainWindow):
 		super().__init__()
 		self.process: QProcess | None = None
 		self.current_output_path: str | None = None
+		self.stdout_buffer = ProcessOutputBuffer()
+		self.stderr_buffer = ProcessOutputBuffer()
 		self.settings = QSettings("codex", "cloud-dicom-downloader")
 
 		self.setWindowTitle(APP_NAME)
@@ -453,6 +456,8 @@ class MainWindow(QMainWindow):
 			return
 
 		self.log_edit.clear()
+		self.stdout_buffer = ProcessOutputBuffer()
+		self.stderr_buffer = ProcessOutputBuffer()
 		if selection_label:
 			self._append_log_text(f"已选择检查：{selection_label}\n")
 		self.current_output_path = None
@@ -548,16 +553,18 @@ class MainWindow(QMainWindow):
 	def _consume_stdout(self):
 		if not self.process:
 			return
-		text = bytes(self.process.readAllStandardOutput()).decode("utf-8", errors="replace")
+		text = self.stdout_buffer.feed(bytes(self.process.readAllStandardOutput()))
 		self._append_log_text(text)
 
 	def _consume_stderr(self):
 		if not self.process:
 			return
-		text = bytes(self.process.readAllStandardError()).decode("utf-8", errors="replace")
+		text = self.stderr_buffer.feed(bytes(self.process.readAllStandardError()))
 		self._append_log_text(text)
 
 	def _on_process_finished(self, exit_code: int, _status):
+		self._append_log_text(self.stdout_buffer.flush())
+		self._append_log_text(self.stderr_buffer.flush())
 		self.progress_bar.setRange(0, 1)
 		self.progress_bar.setValue(1 if exit_code == 0 else 0)
 		self.start_button.setEnabled(True)
