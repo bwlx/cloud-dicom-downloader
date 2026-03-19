@@ -38,6 +38,9 @@
   * [ss.mtywcloud.com](#ssmtywcloudcom)
   * [m.yzhcloud.com](#myzhcloudcom)
   * [work.sugh.net](#worksughnet)
+  * [cloud.wehzsy.com](#cloudwehzsycom)
+  * [medapi.dsrmyy.cn](#medapidsrmyycn)
+  * [cyemis.bjcyh.mobi](#cyemisbjcyhmobi)
 
 ## 使用步骤
 
@@ -257,6 +260,15 @@ URL 格式为`https://work.sugh.net:8002/pc/auth-viewer?clinicalShareToken=<toke
 python downloader.py <url>
 ```
 
+
+### cloud.wehzsy.com
+
+杭州市第一人民医院影像查阅系统（微影），注意医院公众号分享时，有效期设置为1年，允许下载需勾选，否则会未授权无法下载，URL 格式为 `http://cloud.wehzsy.com:9003/PC/#/share_report?tel=<TEL>&pid=<PATIENT_ID>&rid=<RESULT_ID>&download=1&forward=1&Expires=<EXPIRES>&Signature=<SIGNATURE>`，下载为DICOM(自带浏览器)，查看需自行解压Zip后使用RSVS.exe查看，DICOM文件在IMAGE目录里
+
+```
+python downloader.py <url>
+```
+
 ### medapi.dsrmyy.cn
 
 支持以下分享入口：
@@ -267,6 +279,7 @@ python downloader.py <url>
 ### cyemis.bjcyh.mobi
 
 URL 格式为 `https://cyemis.bjcyh.mobi:8082/Study/ViewImage?studyId=<studyId>`
+
 
 ### pacs.ydyy.cn
 
