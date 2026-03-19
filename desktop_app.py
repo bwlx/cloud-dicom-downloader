@@ -94,6 +94,10 @@ def format_study_option(study: dict) -> str:
 	return " | ".join(part for part in parts if part)
 
 
+def is_suffix_code_prompt(prompt: str | None) -> bool:
+	return bool(prompt and "后四位" in prompt)
+
+
 class StudySelectionDialog(QDialog):
 	def __init__(self, studies: list[dict], parent=None):
 		super().__init__(parent)
@@ -380,6 +384,8 @@ class MainWindow(QMainWindow):
 				if password_required:
 					if password_prompt == "手机号/身份证后四位":
 						self.site_hint.setText("该链接需要填写手机号或身份证后四位，程序会自动从列表中选择 CT 检查。")
+					elif is_suffix_code_prompt(password_prompt):
+						self.site_hint.setText(f"该链接需要填写{password_prompt}。")
 					else:
 						self.site_hint.setText("该站点需要访问密码。")
 				elif raw_supported:
@@ -390,9 +396,9 @@ class MainWindow(QMainWindow):
 			self.site_hint.setText("支持直接粘贴医疗影像报告链接。")
 
 		self.password_edit.setEnabled(password_required)
-		if password_prompt == "手机号/身份证后四位":
+		if is_suffix_code_prompt(password_prompt):
 			self.password_label.setText("后四位")
-			self.password_edit.setPlaceholderText("填写手机号或身份证后四位")
+			self.password_edit.setPlaceholderText(f"填写{password_prompt}")
 			self.password_edit.setEchoMode(QLineEdit.EchoMode.Normal)
 		else:
 			self.password_label.setText("访问凭证")
@@ -424,8 +430,8 @@ class MainWindow(QMainWindow):
 			return
 
 		if password_required and not password:
-			if password_prompt == "手机号/身份证后四位":
-				QMessageBox.warning(self, "参数错误", "该链接需要填写手机号或身份证后四位。")
+			if is_suffix_code_prompt(password_prompt):
+				QMessageBox.warning(self, "参数错误", f"该链接需要填写{password_prompt}。")
 			else:
 				QMessageBox.warning(self, "参数错误", "该站点需要访问密码。")
 			return

@@ -279,3 +279,14 @@ python downloader.py <url>
 ### cyemis.bjcyh.mobi
 
 URL 格式为 `https://cyemis.bjcyh.mobi:8082/Study/ViewImage?studyId=<studyId>`
+
+
+### pacs.ydyy.cn
+
+支持以下入口：
+
+- `https://pacs.ydyy.cn:8860/M-Viewer/shortserver/<shortUrl>`
+- `https://pacs.ydyy.cn:8860/M-Viewer/#/phone-visible/<bussId>?...`
+- `https://pacs.ydyy.cn:8860/M-Viewer/m/2D?tenantId=default&userId=<userId>&checkserialnum=<bussId>`
+
+`phone-visible` 分享链接需要输入身份证后四位，程序会先调用站点验证接口，再自动切到移动端 XML/WADO 下载链路。
