@@ -48,7 +48,9 @@ def _find_packaged_chromium():
 	if sys.platform == "darwin":
 		patterns = [
 			"ms-playwright/chromium-*/**/Chromium.app/Contents/MacOS/Chromium",
+			"ms-playwright/chromium-*/**/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
 			"chromium-*/**/Chromium.app/Contents/MacOS/Chromium",
+			"chromium-*/**/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
 		]
 	elif sys.platform == "win32":
 		patterns = [

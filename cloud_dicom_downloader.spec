@@ -39,11 +39,12 @@ def browser_cache_roots():
 	return unique
 
 
-for browser_cache in browser_cache_roots():
-	if browser_cache.exists():
-		for child in browser_cache.iterdir():
-			if child.is_dir() and (child.name.startswith("chromium-") or child.name.startswith("ffmpeg-")):
-				datas.append((str(child), f"ms-playwright/{child.name}"))
+if sys.platform != "darwin":
+	for browser_cache in browser_cache_roots():
+		if browser_cache.exists():
+			for child in browser_cache.iterdir():
+				if child.is_dir() and (child.name.startswith("chromium-") or child.name.startswith("ffmpeg-")):
+					datas.append((str(child), f"ms-playwright/{child.name}"))
 
 a = Analysis(
 	["desktop_app.py"],
