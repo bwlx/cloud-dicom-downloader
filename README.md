@@ -73,6 +73,7 @@ python desktop_app.py
 ```
 
 脚本会安装打包依赖、补齐 Playwright 的 Chromium、生成 `.app` 和 `.dmg`，产物位于 `dist/` 目录。
+如果要指定版本号，也可以执行 `./build_macos.sh 0.1.0`，生成带版本号的 dmg 文件名。
 当前脚本生成的是未签名安装包；如果要在外部分发，还需要自行做 Apple 签名和 notarization。
 
 ### 打包 Windows 版本
@@ -100,28 +101,31 @@ python -m pip install --upgrade pip
 - 用 `cloud_dicom_downloader.spec` 生成 `dist\Cloud DICOM Downloader\`
 - 额外生成 `dist\Cloud-DICOM-Downloader-windows.zip`
 
+便携版 `.zip` 现在会一并带上常见的 VC++ 运行库 DLL，减少在干净 Windows 机器上直接解压运行时缺少 `QtCore` 依赖的概率。对普通用户分发时，仍然优先建议使用安装包。
+
 如果机器上已经安装了 Inno Setup，并且 `ISCC` 在 `PATH` 中，脚本还会额外生成 `dist\Cloud-DICOM-Downloader-Setup.exe`。
 安装包会自动捆绑并静默安装 `Microsoft Visual C++ 2015-2022 Redistributable (x64)`。
 
-### GitHub Actions 自动构建 Windows 安装包
+### GitHub Actions 自动构建桌面安装包
 
 仓库已经增加工作流 [build-windows.yml](/Users/johan/panda/cloud-dicom-downloader/.github/workflows/build-windows.yml)：
 
-- 手动触发：`Actions -> Build Windows Installer -> Run workflow`
+- 手动触发：`Actions -> Build Desktop Packages -> Run workflow`
 - 自动触发：推送 `v*` 标签，例如 `v0.1.0`
 
-工作流会在 `windows-latest` runner 上：
+工作流会分别在 `windows-latest` 和 `macos-latest` runner 上：
 
 - 安装 Python 3.12
 - 缓存 pip 依赖
-- 安装 Inno Setup
 - 执行 `build_windows.ps1`
-- 分别上传安装包和便携版为 workflow artifact
+- 执行 `build_macos.sh`
+- 上传 Windows 安装包、Windows 便携版和 macOS dmg 为 workflow artifact
 
 当触发来源是 tag 时，还会自动创建或更新 GitHub Release，并上传：
 
 - `Cloud-DICOM-Downloader-windows-<version>.zip`
 - `Cloud-DICOM-Downloader-Setup-<version>.exe`
+- `Cloud-DICOM-Downloader-macOS-unsigned-<version>.dmg`
 
 建议的发版命令：
 

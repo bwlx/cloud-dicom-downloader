@@ -25,6 +25,30 @@ python -m pip install -r requirements-packaging.txt
 python -m playwright install chromium
 python -m PyInstaller --noconfirm cloud_dicom_downloader.spec
 
+$PythonDir = Split-Path -Parent (Get-Command python).Source
+$RuntimeDllNames = @(
+	"vcruntime140.dll",
+	"vcruntime140_1.dll",
+	"msvcp140.dll",
+	"concrt140.dll"
+)
+$RuntimeTargets = @($AppDir, (Join-Path $AppDir "_internal"))
+
+foreach ($DllName in $RuntimeDllNames) {
+	$SourcePath = Join-Path $PythonDir $DllName
+	if (-not (Test-Path $SourcePath)) {
+		continue
+	}
+
+	foreach ($TargetDir in $RuntimeTargets) {
+		if (-not (Test-Path $TargetDir)) {
+			continue
+		}
+
+		Copy-Item $SourcePath -Destination (Join-Path $TargetDir $DllName) -Force
+	}
+}
+
 $ZipPath = Join-Path $DistDir $ZipName
 if (Test-Path $ZipPath) {
 	Remove-Item $ZipPath -Force

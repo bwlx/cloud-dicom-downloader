@@ -4,8 +4,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT_DIR"
 
+VERSION="${1:-${BUILD_VERSION:-0.1.0}}"
 APP_NAME="Cloud DICOM Downloader.app"
-DMG_NAME="Cloud-DICOM-Downloader-macOS-unsigned.dmg"
+SAFE_VERSION="$(printf '%s' "$VERSION" | sed 's/[^0-9A-Za-z._-]/-/g')"
+DMG_NAME="Cloud-DICOM-Downloader-macOS-unsigned-${SAFE_VERSION}.dmg"
 STAGE_DIR="$ROOT_DIR/build/dmg"
 
 python -m pip install -r requirements-packaging.txt
