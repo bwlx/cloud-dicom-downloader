@@ -1,31 +1,107 @@
 import argparse
 import asyncio
+import platform
 import re
+import tempfile
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QProcess, QProcessEnvironment, QSettings, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices, QFont, QTextCursor
-from PySide6.QtWidgets import (
-	QApplication,
-	QCheckBox,
-	QDialog,
-	QDialogButtonBox,
-	QFileDialog,
-	QGridLayout,
-	QGroupBox,
-	QHBoxLayout,
-	QLabel,
-	QLineEdit,
-	QListWidget,
-	QMainWindow,
-	QMessageBox,
-	QPlainTextEdit,
-	QProgressBar,
-	QPushButton,
-	QVBoxLayout,
-	QWidget,
-)
+APP_NAME = "Cloud DICOM Downloader"
+
+
+def _qt_import_search_roots() -> list[Path]:
+	if getattr(sys, "frozen", False):
+		exe_dir = Path(sys.executable).resolve().parent
+		roots = [exe_dir, exe_dir / "_internal"]
+	else:
+		base_dir = Path(__file__).resolve().parent
+		roots = [base_dir, base_dir / "_internal"]
+
+	if hasattr(sys, "_MEIPASS"):
+		meipass = Path(sys._MEIPASS)
+		roots.extend([meipass, meipass / "_internal"])
+
+	unique = []
+	for root in roots:
+		if root not in unique:
+			unique.append(root)
+	return unique
+
+
+def _write_qt_import_diagnostics(exc: ImportError) -> Path:
+	log_path = Path(tempfile.gettempdir()) / "cloud-dicom-downloader-qt-import.log"
+	relative_candidates = (
+		"PySide6/QtCore.pyd",
+		"PySide6/Qt6Core.dll",
+		"PySide6/shiboken6.abi3.dll",
+		"vcruntime140.dll",
+		"vcruntime140_1.dll",
+		"msvcp140.dll",
+		"concrt140.dll",
+	)
+
+	lines = [
+		f"error={exc}",
+		f"platform={platform.platform()}",
+		f"release={platform.release()}",
+		f"version={platform.version()}",
+		f"machine={platform.machine()}",
+		f"python_executable={sys.executable}",
+		f"frozen={getattr(sys, 'frozen', False)}",
+	]
+
+	for root in _qt_import_search_roots():
+		lines.append(f"search_root={root}")
+		for relative in relative_candidates:
+			candidate = root / relative
+			lines.append(f"exists[{candidate}]={candidate.exists()}")
+
+	log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+	return log_path
+
+
+try:
+	from PySide6.QtCore import QProcess, QProcessEnvironment, QSettings, QTimer, QUrl
+	from PySide6.QtGui import QDesktopServices, QFont, QTextCursor
+	from PySide6.QtWidgets import (
+		QApplication,
+		QCheckBox,
+		QDialog,
+		QDialogButtonBox,
+		QFileDialog,
+		QGridLayout,
+		QGroupBox,
+		QHBoxLayout,
+		QLabel,
+		QLineEdit,
+		QListWidget,
+		QMainWindow,
+		QMessageBox,
+		QPlainTextEdit,
+		QProgressBar,
+		QPushButton,
+		QVBoxLayout,
+		QWidget,
+	)
+except ImportError as exc:
+	if sys.platform == "win32":
+		log_path = _write_qt_import_diagnostics(exc)
+		try:
+			import ctypes
+
+			message = (
+				"Qt 运行时加载失败。\n\n"
+				f"{exc}\n\n"
+				f"诊断日志已写入：\n{log_path}\n\n"
+				"常见原因：\n"
+				"1. 目标系统版本过旧。\n"
+				"2. Qt 或 VC++ 运行库 DLL 缺失。"
+			)
+			ctypes.windll.user32.MessageBoxW(None, message, APP_NAME, 0x10)
+		except Exception:
+			pass
+		raise SystemExit(1)
+	raise
 
 from desktop_core import DownloadRequest, run_download_request, url_password_prompt, url_requires_password, url_supports_raw
 from desktop_encoding import ProcessOutputBuffer
@@ -34,7 +110,6 @@ from crawlers import jdyfy
 from runtime_config import DOWNLOAD_ROOT_ENV
 
 BASE_DIR = Path(__file__).resolve().parent
-APP_NAME = "Cloud DICOM Downloader"
 _SAVE_PATTERNS = (
 	re.compile(r"保存到[:：]\s*(.+)"),
 	re.compile(r"下载完成，保存位置\s*(.+)"),
