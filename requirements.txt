@@ -1,4 +1,5 @@
 aiohttp~=3.12
+certifi>=2024.0,<2027
 playwright~=1.55
 tqdm~=4.67
 yarl~=1.20

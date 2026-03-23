@@ -1,6 +1,7 @@
 import math
 import os
 import re
+import ssl
 import sys
 from base64 import b64encode
 from hashlib import sha256
@@ -10,6 +11,7 @@ from typing import Optional
 from zipfile import ZipFile
 
 import aiohttp
+import certifi
 from pydicom import Dataset
 from pydicom.tag import Tag
 from pydicom.valuerep import VR, STR_VR, INT_VR, FLOAT_VR
@@ -24,6 +26,7 @@ _HEADERS = {
 	"Upgrade-Insecure-Requests": "1",
 	"User-Agent": f"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/143.0",
 }
+_SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 
 
 # noinspection PyTypeChecker
@@ -68,6 +71,7 @@ def new_http_client(*args, **kwargs):
 	
 	# 使用 quote_cookie=False 避免对包含特殊字符的 cookie 值进行引号处理
 	kwargs.setdefault("cookie_jar", aiohttp.CookieJar(quote_cookie=False))
+	kwargs.setdefault("connector", aiohttp.TCPConnector(ssl=_SSL_CONTEXT))
 
 	return aiohttp.ClientSession(*args, **kwargs)
 

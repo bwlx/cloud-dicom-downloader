@@ -1,11 +1,12 @@
 from pathlib import Path
 
 import pytest
+import ssl
 from aiohttp import web, ClientResponseError
 from pytest import mark
 
 # noinspection PyProtectedMember
-from crawlers._utils import pathify, new_http_client, make_unique_dir
+from crawlers._utils import _SSL_CONTEXT, pathify, new_http_client, make_unique_dir
 
 
 @mark.parametrize('text, expected', [
@@ -41,6 +42,15 @@ async def test_response_dumping():
 	finally:
 		await runner.cleanup()
 		Path("dump.zip").unlink(missing_ok=True)
+
+
+async def test_new_http_client_uses_certifi_ssl_context():
+	client = new_http_client()
+	try:
+		assert isinstance(client._connector._ssl, ssl.SSLContext)
+		assert client._connector._ssl is _SSL_CONTEXT
+	finally:
+		await client.close()
 
 
 def test_make_unique_dir():
