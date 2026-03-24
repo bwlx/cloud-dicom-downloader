@@ -282,9 +282,9 @@ async def _download_study(client, study: StudyEntry):
 		label = series.description or (str(series.series_number) if series.series_number is not None else "Unnamed")
 		directory = SeriesDirectory(save_to, series.series_number, series.description, len(series.images))
 		for index, image in enumerate(tqdm(series.images, desc=label, unit="张")):
-			async with client.get(image.url) as response:
-				dicom = await response.read()
-			directory.get(index, "dcm").write_bytes(dicom)
+			await directory.download(client, index, "dcm", image.url, label=f"{label} 第 {index + 1} 张")
+
+		directory.ensure_complete()
 
 
 async def run(share_url, *args):

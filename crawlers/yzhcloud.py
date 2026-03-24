@@ -35,5 +35,6 @@ async def run(share_url: str):
 					name, ext = name[:sep], name[sep + 1:]
 
 				u = cdn.joinpath(f"{study_uid}/{series['series_number']}.{name}.{ext}")
-				async with client.get(u) as response:
-					dir_.get(i, "dcm").write_bytes(await response.read())
+				await dir_.download(client, i, "dcm", u, label=f"{desc} 第 {i + 1} 张")
+
+			dir_.ensure_complete()

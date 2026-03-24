@@ -129,6 +129,14 @@ async def run(share_url):
 					"SeriesUID": series["UID"],
 					"includeDeleted": "false",
 				}
-				async with _call_image_service(client, credentials_token, params) as response:
-					dir_.get(i, "dcm").write_bytes(await response.read())
+				await dir_.download(
+					client,
+					i,
+					"dcm",
+					"/vna/image/Home/ImageService",
+					params={**params, "randnum": random.uniform(0, 1)},
+					headers={"Authorization": credentials_token},
+					label=f"{desc} 第 {i + 1} 张",
+				)
 
+			dir_.ensure_complete()

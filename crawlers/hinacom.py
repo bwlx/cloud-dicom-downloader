@@ -17,8 +17,8 @@ from pydicom.tag import Tag
 from pydicom.uid import ExplicitVRLittleEndian, JPEG2000Lossless
 from tqdm import tqdm
 
-from crawlers._utils import pathify, new_http_client, parse_dcm_value, SeriesDirectory, make_unique_dir, \
-	suggest_save_dir
+from crawlers._utils import pathify, new_http_client, parse_dcm_value, retry_async, SeriesDirectory, make_unique_dir, \
+	suggest_save_dir, write_bytes_atomic, write_text_atomic
 
 _LINK_VIEW = re.compile(r"/Study/ViewImage\?studyId=([\w-]+)")
 _LINK_ENTRY = re.compile(r"window\.location\.href = '([^']+)'")
@@ -121,14 +121,18 @@ class HinacomDownloader:
 			tasks = tqdm(images, desc=name, unit="张", file=sys.stdout)
 			for i, info in enumerate(tasks):
 				# 图片响应头包含的标签不够，必须每个都请求 GetImageDicomTags。
-				tags = await self.get_tags(info)
+				tags = await retry_async(lambda: self.get_tags(info), label=f"{name} 第 {i + 1} 张标签")
 
 				# 没有标签的视为非 DCM 文件，跳过。
 				if len(tags) == 0:
+					dir_.skip(i)
 					continue
 
-				pixels, _ = await self.get_image(info, is_raw)
+				pixels, _ = await retry_async(lambda: self.get_image(info, is_raw), label=f"{name} 第 {i + 1} 张图像")
 				_write_dicom(tags, pixels, dir_.get(i, "dcm"))
+				dir_.mark_complete(i)
+
+			dir_.ensure_complete()
 
 	@staticmethod
 	async def from_url(client: ClientSession, viewer_url: str):
@@ -222,7 +226,15 @@ def _write_dicom(tag_list: list, image: bytes, filename: Path):
 		ds.PixelData = image
 		ds.file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
 
-	ds.save_as(filename, enforce_file_format=True)
+	filename.parent.mkdir(parents=True, exist_ok=True)
+	temp = filename.with_name(filename.name + ".part")
+	temp.unlink(missing_ok=True)
+	try:
+		ds.save_as(temp, enforce_file_format=True)
+		temp.replace(filename)
+	except Exception:
+		temp.unlink(missing_ok=True)
+		raise
 
 
 async def run(share_url, password, *args):
@@ -272,9 +284,9 @@ async def fetch_responses(downloader: HinacomDownloader, save_to: Path, is_raw: 
 		for i, info in enumerate(tasks):
 			tags = await downloader.get_tags(info)
 			pixels, attrs = await downloader.get_image(info, is_raw)
-			dir_.joinpath(f"{i}.tags.json").write_text(json.dumps(tags))
-			dir_.joinpath(f"{i}.json").write_text(attrs)
-			dir_.joinpath(f"{i}.slice").write_bytes(pixels)
+			write_text_atomic(dir_.joinpath(f"{i}.tags.json"), json.dumps(tags))
+			write_text_atomic(dir_.joinpath(f"{i}.json"), attrs)
+			write_bytes_atomic(dir_.joinpath(f"{i}.slice"), pixels)
 
 
 def build_dcm_from_responses(source: Path, out_dir: Path = None):

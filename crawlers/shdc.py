@@ -117,7 +117,6 @@ async def run(share_url: str):
 					"Authorization": _get_auth(query, name),
 					"Referer": "https://ylyyx.shdc.org.cn/",
 				}
+				await dir_.download(client, i, "dcm", path, headers=headers, label=f"{desc} 第 {i + 1} 张")
 
-				async with client.get(path, headers=headers) as response:
-					file = await response.read()
-					dir_.get(i, "dcm").write_bytes(file)
+			dir_.ensure_complete()

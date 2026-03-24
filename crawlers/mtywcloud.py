@@ -48,5 +48,13 @@ async def run(url):
 					"retrieveAE": "",
 					"OrganizationID": query["OrganizationID"],
 				}
-				async with client.get("/ICCWebClient/api/Dicom/File", params=params) as response:
-					dir_.get(i, "dcm").write_bytes(await response.read())
+				await dir_.download(
+					client,
+					i,
+					"dcm",
+					"/ICCWebClient/api/Dicom/File",
+					params=params,
+					label=f"{desc} 第 {i + 1} 张",
+				)
+
+			dir_.ensure_complete()

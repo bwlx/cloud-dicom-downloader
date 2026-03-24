@@ -2,11 +2,11 @@ from pathlib import Path
 
 import pytest
 import ssl
-from aiohttp import web, ClientResponseError
+from aiohttp import web, ClientConnectionError, ClientResponseError
 from pytest import mark
 
 # noinspection PyProtectedMember
-from crawlers._utils import _SSL_CONTEXT, pathify, new_http_client, make_unique_dir
+from crawlers._utils import _SSL_CONTEXT, IncompleteDownloadError, download_to_path, pathify, new_http_client, make_unique_dir, retry_async, SeriesDirectory, write_bytes_atomic
 
 
 @mark.parametrize('text, expected', [
@@ -51,6 +51,67 @@ async def test_new_http_client_uses_certifi_ssl_context():
 		assert client._connector._ssl is _SSL_CONTEXT
 	finally:
 		await client.close()
+
+
+async def test_retry_async_retries_connection_errors():
+	attempts = 0
+
+	async def flaky():
+		nonlocal attempts
+		attempts += 1
+		if attempts == 1:
+			raise ClientConnectionError("boom")
+		return "ok"
+
+	assert await retry_async(flaky, label="测试下载", attempts=2) == "ok"
+	assert attempts == 2
+
+
+async def test_download_to_path_writes_atomically(tmp_path):
+	async def handler(_):
+		return web.Response(body=b"DICM")
+
+	app = web.Application()
+	app.router.add_get("/", handler)
+	runner = web.AppRunner(app)
+	await runner.setup()
+	site = web.TCPSite(runner, "127.0.0.1", 0)
+	await site.start()
+	port = site._server.sockets[0].getsockname()[1]
+	target = tmp_path / "file.dcm"
+
+	client = new_http_client()
+	try:
+		await download_to_path(client, target, f"http://127.0.0.1:{port}/", label="测试文件")
+		assert target.read_bytes() == b"DICM"
+		assert not target.with_name("file.dcm.part").exists()
+	finally:
+		await client.close()
+		await runner.cleanup()
+
+
+def test_write_bytes_atomic(tmp_path):
+	target = tmp_path / "test.dcm"
+	write_bytes_atomic(target, b"DICM")
+	assert target.read_bytes() == b"DICM"
+	assert not target.with_name("test.dcm.part").exists()
+
+
+def test_series_directory_ensure_complete_accepts_skipped_items(tmp_path):
+	study_dir = tmp_path / "study"
+	directory = SeriesDirectory(study_dir, 1, "序列", 2, unique=False)
+	directory.write_bytes(0, "dcm", b"1")
+	directory.skip(1)
+	directory.ensure_complete()
+
+
+def test_series_directory_ensure_complete_raises_when_missing(tmp_path):
+	study_dir = tmp_path / "study"
+	directory = SeriesDirectory(study_dir, 1, "序列", 2, unique=False)
+	directory.write_bytes(0, "dcm", b"1")
+
+	with pytest.raises(IncompleteDownloadError):
+		directory.ensure_complete()
 
 
 def test_make_unique_dir():

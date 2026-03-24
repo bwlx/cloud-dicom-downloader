@@ -16,7 +16,7 @@ from pydicom import dcmread, Dataset
 from tqdm import tqdm
 from yarl import URL
 
-from crawlers._utils import new_http_client, SeriesDirectory, suggest_save_dir
+from crawlers._utils import new_http_client, retry_async, SeriesDirectory, suggest_save_dir
 
 _WHITE_SPACES = re.compile(r"\s+")
 
@@ -71,7 +71,10 @@ async def download_study(ws: ClientWebSocketResponse, info):
 			continue
 
 		# 只有先读取一个影像才能确定目录的名字。
-		first = await _get_dcm(ws, hospital_id, study, sid, 0)
+		first = await retry_async(
+			lambda: _get_dcm(ws, hospital_id, study, sid, 0),
+			label=f"{sid} 第 1 张",
+		)
 		ds = dcmread(BytesIO(first))
 
 		if not study_dir:
@@ -80,14 +83,19 @@ async def download_study(ws: ClientWebSocketResponse, info):
 
 		description = ds.SeriesDescription or "定位像"
 		dir_ = SeriesDirectory(study_dir, ds.SeriesNumber, description, sizes[sid])
-		dir_.get(0, "dcm").write_bytes(first)
+		dir_.write_bytes(0, "dcm", first)
 
 		# 这里需要跳过已经下载的一个，tqdm 的迭代式写法好像做不到。
 		with tqdm(initial=1, total=sizes[sid], desc=description, unit="张", file=sys.stdout) as progress:
 			for i in range(1, sizes[sid]):
-				data = await _get_dcm(ws, hospital_id, study, sid, i)
+				data = await retry_async(
+					lambda: _get_dcm(ws, hospital_id, study, sid, i),
+					label=f"{description} 第 {i + 1} 张",
+				)
 				progress.update(1)
-				dir_.get(i, "dcm").write_bytes(data)
+				dir_.write_bytes(i, "dcm", data)
+
+		dir_.ensure_complete()
 
 
 async def run(url):

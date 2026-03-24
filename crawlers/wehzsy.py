@@ -4,7 +4,7 @@ from pathlib import Path
 
 import aiohttp
 import json
-from crawlers._utils import new_http_client, suggest_save_dir
+from crawlers._utils import download_to_path, new_http_client, suggest_save_dir
 
 
 def _extract_share_params(share_url: str) -> dict[str, str]:
@@ -89,8 +89,4 @@ async def run(share_url: str):
 		file_name = URL(zip_url).path.rsplit("/", 1)[-1] or f"{accession_num}_Viewer.zip"
 		save_to = Path(study_dir) / file_name
 		print(f"下载杭州市第一人民医院电子胶片到：{save_to}")
-		async with client.get(zip_url) as response:
-			response.raise_for_status()
-			with save_to.open("wb") as fp:
-				async for chunk in response.content.iter_chunked(16384):
-					fp.write(chunk)
+		await download_to_path(client, save_to, zip_url, label=file_name)

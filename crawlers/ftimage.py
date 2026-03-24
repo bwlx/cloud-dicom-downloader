@@ -11,7 +11,7 @@ from tqdm import tqdm
 from yarl import URL
 
 from crawlers._browser import wait_text, run_with_browser, PlaywrightCrawler
-from crawlers._utils import get_download_root, suggest_save_dir
+from crawlers._utils import IncompleteDownloadError, get_download_root, suggest_save_dir, write_bytes_atomic
 
 
 @dataclass(frozen=True, eq=False)
@@ -80,8 +80,7 @@ class FitImageDownloader(PlaywrightCrawler):
 		index = dcmread(BytesIO(body)).InstanceNumber
 
 		dir_ = get_download_root() / self._study_id / series_id / f"{index}.dcm"
-		dir_.parent.mkdir(parents=True, exist_ok=True)
-		dir_.write_bytes(body)
+		write_bytes_atomic(dir_, body)
 
 		self._downloaded += 1
 
@@ -98,6 +97,19 @@ class FitImageDownloader(PlaywrightCrawler):
 			s.rename(s.with_name(desc))
 
 		return save_to.rename(suggest_save_dir(study.patient, study.kind, study.time))
+
+	def _ensure_complete(self, study: _FitImageStudyInfo):
+		save_to = get_download_root() / self._study_id
+		missing = []
+
+		for series_id, (_, expected) in study.series.items():
+			series_dir = save_to / series_id
+			actual = len(list(series_dir.glob("*.dcm"))) if series_dir.exists() else 0
+			if actual != expected:
+				missing.append(f"{series_id}: {actual}/{expected}")
+
+		if missing:
+			raise IncompleteDownloadError("下载不完整，缺少部分序列文件：" + "; ".join(missing[:8]))
 
 	async def _do_run(self, context: BrowserContext):
 		page = await context.new_page()
@@ -117,6 +129,7 @@ class FitImageDownloader(PlaywrightCrawler):
 			await context.wait_for_event("close", timeout=0)
 
 		self._progress.close()
+		self._ensure_complete(study)
 		print(f"下载完成，保存位置 {self._fix_series_name(study)}")
 
 

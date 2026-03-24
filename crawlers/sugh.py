@@ -52,5 +52,13 @@ async def run(share_url: str):
 			dir_ = SeriesDirectory(study_dir, number, desc, len(instances))
 
 			for i, instance in tqdme(instances.values(), desc=desc):
-				async with client.get(f"{url}/instances/{instance['imageUID']}/", headers=headers) as response:
-					dir_.get(i, "dcm").write_bytes(await response.read())
+				await dir_.download(
+					client,
+					i,
+					"dcm",
+					f"{url}/instances/{instance['imageUID']}/",
+					headers=headers,
+					label=f"{desc} 第 {i + 1} 张",
+				)
+
+			dir_.ensure_complete()

@@ -8,7 +8,7 @@ from Cryptodome.Cipher import AES
 from yarl import URL
 from tqdm import tqdm
 
-from crawlers._utils import SeriesDirectory, new_http_client, pkcs7_pad, pkcs7_unpad, suggest_save_dir
+from crawlers._utils import SeriesDirectory, download_bytes, new_http_client, pkcs7_pad, pkcs7_unpad, suggest_save_dir
 
 _SHARE_CLIENT_ID = "eworld.spa.imagecloud"
 _SHARE_SCOPE = "openid api-operate api-imaging api-archive api-idcas api-ability api-pacs-common"
@@ -225,9 +225,12 @@ async def _download_dicom(client, address: URL, token: AccessToken, study: dict,
 		"TenancyID": str(image.get("TenancyID") or study.get("TenancyID") or params.get("tenancy_id") or ""),
 	}
 	api_url = address.origin().with_path("/api/api-imaging/Dicom/File").with_query(query)
-
-	async with client.get(str(api_url), headers=_authorized_headers(token)) as response:
-		return await response.read()
+	return await download_bytes(
+		client,
+		str(api_url),
+		headers=_authorized_headers(token),
+		label=f"{study.get('StudyDescription') or '数字影像'} DICOM",
+	)
 
 
 async def _download_study(client, address: URL, token: AccessToken, study: dict, params: dict[str, str]):
@@ -250,7 +253,9 @@ async def _download_study(client, address: URL, token: AccessToken, study: dict,
 
 		for index, image in enumerate(tqdm(images, desc=series_name, unit="张")):
 			dicom = await _download_dicom(client, address, token, study, image, params)
-			directory.get(index, "dcm").write_bytes(dicom)
+			directory.write_bytes(index, "dcm", dicom)
+
+		directory.ensure_complete()
 
 
 async def run(share_url, *args):

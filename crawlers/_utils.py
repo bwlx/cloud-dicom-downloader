@@ -1,3 +1,4 @@
+import asyncio
 import math
 import os
 import re
@@ -27,6 +28,8 @@ _HEADERS = {
 	"User-Agent": f"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/143.0",
 }
 _SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+_DOWNLOAD_RETRY_ATTEMPTS = 3
+_DOWNLOAD_CHUNK_SIZE = 16384
 
 
 # noinspection PyTypeChecker
@@ -74,6 +77,106 @@ def new_http_client(*args, **kwargs):
 	kwargs.setdefault("connector", aiohttp.TCPConnector(ssl=_SSL_CONTEXT))
 
 	return aiohttp.ClientSession(*args, **kwargs)
+
+
+class IncompleteDownloadError(Exception):
+	pass
+
+
+def _is_retriable_download_error(exc: Exception):
+	if isinstance(exc, (aiohttp.ClientConnectionError, aiohttp.ClientPayloadError, asyncio.TimeoutError, ssl.SSLError, IncompleteDownloadError)):
+		return True
+	if isinstance(exc, aiohttp.ClientResponseError):
+		return exc.status == 408 or exc.status == 429 or exc.status >= 500
+	return False
+
+
+async def retry_async(action, *, label: str, attempts: int = _DOWNLOAD_RETRY_ATTEMPTS):
+	for attempt in range(1, attempts + 1):
+		try:
+			return await action()
+		except Exception as exc:
+			if attempt >= attempts or not _is_retriable_download_error(exc):
+				raise
+			wait_seconds = min(2 ** (attempt - 1), 4)
+			print(f"{label}失败，正在重试（第 {attempt + 1} 次，共 {attempts} 次）：{exc}", file=sys.stderr)
+			await asyncio.sleep(wait_seconds)
+
+
+def _validate_download_size(label: str, actual_size: int, expected_size: Optional[int]):
+	if expected_size is not None and actual_size != expected_size:
+		raise IncompleteDownloadError(
+			f"{label} 下载不完整，预期 {expected_size} 字节，实际 {actual_size} 字节。"
+		)
+
+
+def write_bytes_atomic(path: Path, data: bytes):
+	path.parent.mkdir(parents=True, exist_ok=True)
+	temp = path.with_name(path.name + ".part")
+	temp.unlink(missing_ok=True)
+
+	try:
+		temp.write_bytes(data)
+		temp.replace(path)
+	except Exception:
+		temp.unlink(missing_ok=True)
+		raise
+
+	return path
+
+
+def write_text_atomic(path: Path, text: str, encoding="utf-8"):
+	path.parent.mkdir(parents=True, exist_ok=True)
+	temp = path.with_name(path.name + ".part")
+	temp.unlink(missing_ok=True)
+
+	try:
+		temp.write_text(text, encoding=encoding)
+		temp.replace(path)
+	except Exception:
+		temp.unlink(missing_ok=True)
+		raise
+
+	return path
+
+
+async def download_bytes(client: aiohttp.ClientSession, url, *, headers=None, params=None, label: str | None = None):
+	text = label or str(url)
+
+	async def _once():
+		async with client.get(url, headers=headers, params=params) as response:
+			body = await response.read()
+			_validate_download_size(text, len(body), response.content_length)
+			return body
+
+	return await retry_async(_once, label=text)
+
+
+async def download_to_path(client: aiohttp.ClientSession, path: Path, url, *, headers=None, params=None, label: str | None = None):
+	path = Path(path)
+	text = label or str(path)
+
+	async def _once():
+		path.parent.mkdir(parents=True, exist_ok=True)
+		temp = path.with_name(path.name + ".part")
+		temp.unlink(missing_ok=True)
+		size = 0
+
+		try:
+			async with client.get(url, headers=headers, params=params) as response:
+				with temp.open("wb") as fp:
+					async for chunk in response.content.iter_chunked(_DOWNLOAD_CHUNK_SIZE):
+						fp.write(chunk)
+						size += len(chunk)
+				_validate_download_size(text, size, response.content_length)
+				temp.replace(path)
+		except Exception:
+			temp.unlink(missing_ok=True)
+			raise
+
+		return path
+
+	return await retry_async(_once, label=text)
 
 
 def tqdme(*args, **kwargs):
@@ -193,8 +296,11 @@ class SeriesDirectory:
 			self._suggested = study_dir / str(number)
 
 		self._unique = unique
+		self._size = size
 		self._path = None
 		self._width = int(math.log10(size)) + 2
+		self._completed = set()
+		self._skipped = set()
 
 	def make_dir(self):
 		if self._unique:
@@ -219,6 +325,41 @@ class SeriesDirectory:
 		base = f"{index + 1}.{extension}"
 		width = self._width + len(extension)
 		return self._path / base.zfill(width)
+
+	def write_bytes(self, index: int, extension: str, data: bytes):
+		path = self.get(index, extension)
+		write_bytes_atomic(path, data)
+		self.mark_complete(index)
+		return path
+
+	def write_text(self, index: int, extension: str, text: str, encoding="utf-8"):
+		path = self.get(index, extension)
+		write_text_atomic(path, text, encoding=encoding)
+		self.mark_complete(index)
+		return path
+
+	async def download(self, client: aiohttp.ClientSession, index: int, extension: str, url, *, headers=None, params=None, label: str | None = None):
+		path = self.get(index, extension)
+		await download_to_path(client, path, url, headers=headers, params=params, label=label)
+		self.mark_complete(index)
+		return path
+
+	def mark_complete(self, index: int):
+		self._completed.add(index)
+
+	def skip(self, index: int):
+		self._skipped.add(index)
+
+	def ensure_complete(self):
+		missing = [i + 1 for i in range(self._size) if i not in self._completed and i not in self._skipped]
+		if not missing:
+			return
+
+		preview = ", ".join(str(i) for i in missing[:8])
+		if len(missing) > 8:
+			preview += " ..."
+		target = self._path or self._suggested
+		raise IncompleteDownloadError(f"{target} 下载不完整，缺少 {len(missing)} 张：{preview}")
 
 
 def parse_dcm_value(value: str, vr: str):
