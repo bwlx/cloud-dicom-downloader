@@ -10,6 +10,7 @@ from desktop_core import resolve_crawler_module, url_password_prompt, url_requir
 		("https://mdmis.cq12320.cn/wcs1/mdmis-app/h5/#/share/detail?share_id=a&content=b", "crawlers.cq12320"),
 		("https://app.ftimage.cn/dimage/index.html?x=1", "crawlers.ftimage"),
 		("https://ss.mtywcloud.com/ICCWebClient/Image/Viewer?x=1", "crawlers.mtywcloud"),
+		("https://cinv.wlycloud.com/#/?uid=share-uid-001&facId=1001", "crawlers.wlycloud"),
 		("http://medapi.dsrmyy.cn:9088/s/share-sid-123", "crawlers.medapi"),
 		(
 			"https://pacs.ydyy.cn:8860/M-Viewer/#/phone-visible/BUSS-001?hideQrcode=1&forward=phone-visible&shortUrl=short-001&idType=3&sign=jwt-token",

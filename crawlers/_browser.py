@@ -99,12 +99,12 @@ def _find_system_chromium():
 	return None
 
 
-async def launch_browser(playwright: Playwright) -> Browser:
+async def launch_browser(playwright: Playwright, *, headless=False) -> Browser:
 	"""
 	考虑到 Playwright 的支持成熟度，还是尽可能地选择 chromium 系浏览器。
 	"""
 	try:
-		return await playwright.chromium.launch(headless=False)
+		return await playwright.chromium.launch(headless=headless)
 	except Error as e:
 		if not e.message.startswith("BrowserType.launch: Executable doesn't exist"):
 			raise
@@ -112,12 +112,12 @@ async def launch_browser(playwright: Playwright) -> Browser:
 	executable = _find_packaged_chromium()
 	if executable:
 		print(f"PlayWright: 使用打包的 Chromium 浏览器 {executable}")
-		return await playwright.chromium.launch(headless=False, executable_path=str(executable))
+		return await playwright.chromium.launch(headless=headless, executable_path=str(executable))
 
 	executable = _find_system_chromium()
 	if executable:
 		print(f"PlayWright: 使用系统浏览器 {executable}")
-		return await playwright.chromium.launch(headless=False, executable_path=str(executable))
+		return await playwright.chromium.launch(headless=headless, executable_path=str(executable))
 
 	raise Exception("未找到可用的 Chromium 浏览器，请先运行 playwright install chromium。")
 
@@ -165,7 +165,7 @@ class PlaywrightCrawler:
 		return self._do_run(context)
 
 
-async def run_with_browser(crawler: PlaywrightCrawler, **kwargs):
+async def run_with_browser(crawler: PlaywrightCrawler, *, headless=False, **kwargs):
 	"""
 	启动 Playwright 浏览器的快捷函数，单个 Browser 实例创建新的 Context。
 
@@ -180,7 +180,7 @@ async def run_with_browser(crawler: PlaywrightCrawler, **kwargs):
 	if not _driver_instance:
 		_driver_instance = async_playwright()
 		_playwright = await _driver_instance.__aenter__()
-		_browser = await launch_browser(_playwright)
+		_browser = await launch_browser(_playwright, headless=headless)
 
 	try:
 		async with await _browser.new_context(**kwargs) as context:
