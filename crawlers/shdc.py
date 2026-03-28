@@ -26,6 +26,28 @@ NONCE = "".join(random.choices(TABLE_62, k=6))
 TIME_SEPS = re.compile(r"[-: ]")
 
 
+def _repair_text(value: str):
+	if not value:
+		return value
+
+	try:
+		repaired = value.encode("latin1").decode("utf-8")
+	except UnicodeError:
+		return value
+
+	return repaired if repaired != value else value
+
+
+def _repair_payload(value):
+	if isinstance(value, str):
+		return _repair_text(value)
+	if isinstance(value, list):
+		return [_repair_payload(item) for item in value]
+	if isinstance(value, dict):
+		return {key: _repair_payload(item) for key, item in value.items()}
+	return value
+
+
 def _sign(query: dict, params: dict):
 	"""
 	该网站的 API 请求有签名机制，算法倒不复杂，扒下代码就能还原。
@@ -69,7 +91,7 @@ async def request(client, query: dict, path: str, form = None, **params):
 		coroutine = client.post(path, params=params, headers=h, data=form)
 
 	async with coroutine as response:
-		body = await response.json(content_type=None)
+		body = _repair_payload(await response.json(content_type=None))
 
 	if body["code"] == 0:
 		return body

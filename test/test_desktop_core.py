@@ -13,6 +13,10 @@ from desktop_core import resolve_crawler_module, url_password_prompt, url_requir
 		("https://cinv.wlycloud.com/#/?uid=share-uid-001&facId=1001", "crawlers.wlycloud"),
 		("http://medapi.dsrmyy.cn:9088/s/share-sid-123", "crawlers.medapi"),
 		(
+			"https://film.radonline.cn/web/fore-end/index.html#/check-detail-share?shareId=share-id-001&xeguId=20260101010101&unitId=unit-001",
+			"crawlers.radonline",
+		),
+		(
 			"https://pacs.ydyy.cn:8860/M-Viewer/#/phone-visible/BUSS-001?hideQrcode=1&forward=phone-visible&shortUrl=short-001&idType=3&sign=jwt-token",
 			"crawlers.ydyy",
 		),

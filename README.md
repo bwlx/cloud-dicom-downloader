@@ -41,6 +41,7 @@
   * [cloud.wehzsy.com](#cloudwehzsycom)
   * [medapi.dsrmyy.cn](#medapidsrmyycn)
   * [cyemis.bjcyh.mobi](#cyemisbjcyhmobi)
+  * [film.radonline.cn](#filmradonlinecn)
 
 ## 使用步骤
 
@@ -266,3 +267,16 @@ URL 格式为 `https://cyemis.bjcyh.mobi:8082/Study/ViewImage?studyId=<studyId>`
 - `https://pacs.ydyy.cn:8860/M-Viewer/m/2D?tenantId=default&userId=<userId>&checkserialnum=<bussId>`
 
 `phone-visible` 分享链接需要输入身份证后四位，程序会先调用站点验证接口，再自动切到移动端 XML/WADO 下载链路。
+
+### film.radonline.cn
+
+支持以下入口：
+
+- `https://film.radonline.cn/web/fore-end/index.html#/check-detail-share?...`
+- `https://film.radonline.cn/webImageSyn/activeImage.html?mergeParameters=...#/`
+
+```
+python downloader.py <url>
+```
+
+该站点的原图下载逻辑运行在网页查看器内，因此依赖 Playwright 浏览器自动化。程序会按序列逐个触发站点内建的原图打包下载，再在本地解压成 `.dcm` 文件。

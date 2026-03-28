@@ -7,7 +7,7 @@ from typing import Iterator
 
 from yarl import URL
 
-from crawlers import cq12320, ftimage, hinacom, jdyfy, medapi, mtywcloud, shdc, sugh, szjudianyun, wlycloud, ydyy, yzhcloud, zscloud, wehzsy
+from crawlers import cq12320, ftimage, hinacom, jdyfy, medapi, mtywcloud, radonline, shdc, sugh, szjudianyun, wlycloud, ydyy, yzhcloud, zscloud, wehzsy
 from runtime_config import DOWNLOAD_ROOT_ENV
 
 
@@ -50,6 +50,8 @@ def resolve_crawler_module(url: str) -> ModuleType:
 		return ydyy
 	if host in {"cinv.wlycloud.com", "rend.wlycloud.com"}:
 		return wlycloud
+	if host == "film.radonline.cn":
+		return radonline
 
 	raise ValueError("不支持的网站，详情见 README.md")
 
