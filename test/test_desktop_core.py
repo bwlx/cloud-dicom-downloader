@@ -8,6 +8,7 @@ from desktop_core import resolve_crawler_module, url_password_prompt, url_requir
 	[
 		("https://foo.medicalimagecloud.com/t/abc", "crawlers.hinacom"),
 		("https://mdmis.cq12320.cn/wcs1/mdmis-app/h5/#/share/detail?share_id=a&content=b", "crawlers.cq12320"),
+		("https://efilm.fs-salon.cn/index?barcode=BARCODE-001&hospitalcode=HOSPITAL-001", "crawlers.fssalon"),
 		("https://app.ftimage.cn/dimage/index.html?x=1", "crawlers.ftimage"),
 		("https://ss.mtywcloud.com/ICCWebClient/Image/Viewer?x=1", "crawlers.mtywcloud"),
 		("https://cinv.wlycloud.com/#/?uid=share-uid-001&facId=1001", "crawlers.wlycloud"),

@@ -32,6 +32,7 @@
   * [medicalimagecloud.com](#medicalimagecloudcom)
   * [mdmis.cq12320.cn](#mdmiscq12320cn)
   * [ylyyx.shdc.org.cn](#ylyyxshdcorgcn)
+  * [efilm.fs-salon.cn](#efilmfs-saloncn)
   * [zscloud.zs-hospital.sh.cn](#zs-hospitalshcn)
   * [ftimage.cn](#ftimagecn)
   * [qr.szjudianyun.com](#qrszjudianyuncom)
@@ -185,6 +186,19 @@ URL 格式：`https://mdmis.cq12320.cn/wcs1/mdmis-app/h5/#/share/detail?share_id
 ```
 python downloader.py <url>
 ```
+
+### efilm.fs-salon.cn
+
+佛山沙龙云胶片，支持以下入口：
+
+- `https://efilm.fs-salon.cn/index?barcode=<...>&hospitalcode=<...>`
+- `https://efilm.fs-salon.cn/cloudFilm?hospitalCode=<...>&reportid=<...>`
+
+```
+python downloader.py <url>
+```
+
+该站点的报告页经常会在普通浏览器里因为 HTTPS 页面加载 HTTP 影像服务而打不开原始影像；本项目会直接调用其报告 API 和 WADO 接口下载 DICOM，不依赖微信浏览器。
 
 ### 202.100.221.200
 
