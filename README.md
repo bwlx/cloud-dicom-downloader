@@ -42,6 +42,7 @@
   * [medapi.dsrmyy.cn](#medapidsrmyycn)
   * [cyemis.bjcyh.mobi](#cyemisbjcyhmobi)
   * [film.radonline.cn](#filmradonlinecn)
+  * [u.elincloud.cn](#uelincloudcn)
 
 ## 使用步骤
 
@@ -184,6 +185,19 @@ URL 格式：`https://mdmis.cq12320.cn/wcs1/mdmis-app/h5/#/share/detail?share_id
 python downloader.py <url>
 ```
 
+### 202.100.221.200
+
+东软睿影 `M-Viewer` 的短链和 profile 链接，例如：
+
+- `http://202.100.221.200:6087/short/<token>`
+- `http://202.100.221.200:6087/M-Viewer/#/profile/<checkserialnum>?sign=<jwt>`
+
+```
+python downloader.py <url>
+```
+
+程序会优先调用站点自带的“图片下载”接口。如果医院这套部署没有开放下载，或站点接口本身返回错误，程序会给出明确提示；这种情况属于站点限制，不是本项目本地参数缺失。
+
 ### zs-hospital.sh.cn
 
 复旦大学附属中山医院所使用的影像平台，URL 格式为`https://zscloud.zs-hospital.sh.cn/film/#/shared?code=<code>`。
@@ -280,3 +294,11 @@ python downloader.py <url>
 ```
 
 该站点的原图下载逻辑运行在网页查看器内，因此依赖 Playwright 浏览器自动化。程序会按序列逐个触发站点内建的原图打包下载，再在本地解压成 `.dcm` 文件。
+
+### u.elincloud.cn
+
+例如：
+
+- `https://u.elincloud.cn/index.html#/reportView?...`
+
+这类云影像链接通常在网页查看器里就已经提供了直接下载 DICOM 的功能，一般不需要再通过本项目下载，因此目前不单独适配。

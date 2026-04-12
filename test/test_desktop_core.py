@@ -20,6 +20,14 @@ from desktop_core import resolve_crawler_module, url_password_prompt, url_requir
 			"https://pacs.ydyy.cn:8860/M-Viewer/#/phone-visible/BUSS-001?hideQrcode=1&forward=phone-visible&shortUrl=short-001&idType=3&sign=jwt-token",
 			"crawlers.ydyy",
 		),
+		(
+			"http://202.100.221.200:6087/short/short-001",
+			"crawlers.neusoft",
+		),
+		(
+			"https://lk-pacsview.rjh.com.cn/web/fore-end/index.html#/check-detail-share?shareId=abc&xeguId=xyz&unitId=rjh",
+			"crawlers.rjh",
+		),
 	],
 )
 def test_resolve_crawler_module(url, module_name):
