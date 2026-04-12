@@ -43,6 +43,7 @@
   * [cyemis.bjcyh.mobi](#cyemisbjcyhmobi)
   * [film.radonline.cn](#filmradonlinecn)
   * [u.elincloud.cn](#uelincloudcn)
+  * [lk-pacsview.rjh.com.cn](#lk-pacsviewrjhcomcn)
 
 ## 使用步骤
 
@@ -302,3 +303,16 @@ python downloader.py <url>
 - `https://u.elincloud.cn/index.html#/reportView?...`
 
 这类云影像链接通常在网页查看器里就已经提供了直接下载 DICOM 的功能，一般不需要再通过本项目下载，因此目前不单独适配。
+
+### lk-pacsview.rjh.com.cn
+
+上海瑞金医院 RJZYV2 影像查看器，支持分享链接和直接查看器链接：
+
+- `https://lk-pacsview.rjh.com.cn/web/fore-end/index.html#/check-detail-share?shareId=<id>`
+- `https://lk-pacsview.rjh.com.cn/webImageSyn/activeImage.html?...`
+
+```
+python downloader.py <url>
+```
+
+该爬虫依赖 Playwright 浏览器自动化，在网页查看器内通过 `dicomProvider.getImageFileAsync` 逐张获取 DICOM 文件。
