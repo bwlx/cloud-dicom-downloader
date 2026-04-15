@@ -33,6 +33,7 @@
   * [mdmis.cq12320.cn](#mdmiscq12320cn)
   * [ylyyx.shdc.org.cn](#ylyyxshdcorgcn)
   * [efilm.fs-salon.cn](#efilmfs-saloncn)
+  * [efilmcloud.com](#efilmcloudcom)
   * [zscloud.zs-hospital.sh.cn](#zs-hospitalshcn)
   * [ftimage.cn](#ftimagecn)
   * [qr.szjudianyun.com](#qrszjudianyuncom)
@@ -199,6 +200,19 @@ python downloader.py <url>
 ```
 
 该站点的报告页经常会在普通浏览器里因为 HTTPS 页面加载 HTTP 影像服务而打不开原始影像；本项目会直接调用其报告 API 和 WADO 接口下载 DICOM，不依赖微信浏览器。
+
+### efilmcloud.com
+
+富医睿影云胶片，支持短链入口和 DICOM 查看器入口：
+
+- `https://*.efilmcloud.com:<port>/<short-token>`
+- `https://*.efilmcloud.com:8803/?token=<...>&webApiUrl=<...>`
+
+```
+python downloader.py <url>
+```
+
+程序会先通过短链解析检查参数，再读取站点返回的 DICOM 查看器数据，最后按每张图像的 WADO 地址下载原始 DICOM。
 
 ### 202.100.221.200
 
