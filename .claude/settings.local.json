@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:lk-pacsview.rjh.com.cn)",
+      "Bash(python:*)",
+      "Bash(pytest:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)",
+      "Bash(curl -s -I \"https://efilm.fs-salon.cn/index?barcode=NTI2NzExMDg%3D&hospitalcode=MTQxMjM%3D\")",
+      "Bash(curl -s -A \"Mozilla/5.0 \\(iPhone; CPU iPhone OS 16_6 like Mac OS X\\) AppleWebKit/605.1.15 \\(KHTML, like Gecko\\) Mobile/15E148 MicroMessenger/8.0.50 NetType/WIFI Language/zh_CN\" \"https://efilm.fs-salon.cn/index?barcode=NTI2NzExMDg%3D&hospitalcode=MTQxMjM%3D\")",
+      "Bash(curl:*)",
+      "WebFetch(domain:efilm.fs-salon.cn)",
+      "Bash(grep -oE '\\(Patient|Study|Image|Series\\)[^;]{1,100}')",
+      "Bash(git commit:*)",
+      "Bash(git tag:*)"
+    ]
+  }
+}

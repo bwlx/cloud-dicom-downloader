@@ -90,6 +90,35 @@ async def test_download_to_path_writes_atomically(tmp_path):
 		await runner.cleanup()
 
 
+async def test_download_to_path_resume_redownloads_partial_file(tmp_path):
+	body = b"DICM-DATA"
+	seen_ranges = []
+
+	async def handler(request):
+		seen_ranges.append(request.headers.get("Range"))
+		return web.Response(body=body)
+
+	app = web.Application()
+	app.router.add_get("/", handler)
+	runner = web.AppRunner(app)
+	await runner.setup()
+	site = web.TCPSite(runner, "127.0.0.1", 0)
+	await site.start()
+	port = site._server.sockets[0].getsockname()[1]
+	target = tmp_path / "file.dcm"
+	target.with_name("file.dcm.part").write_bytes(body[:4])
+
+	client = new_http_client()
+	try:
+		await download_to_path(client, target, f"http://127.0.0.1:{port}/", label="测试文件", resume=True)
+		assert target.read_bytes() == body
+		assert seen_ranges == [None]
+		assert not target.with_name("file.dcm.part").exists()
+	finally:
+		await client.close()
+		await runner.cleanup()
+
+
 def test_write_bytes_atomic(tmp_path):
 	target = tmp_path / "test.dcm"
 	write_bytes_atomic(target, b"DICM")
@@ -112,6 +141,38 @@ def test_series_directory_ensure_complete_raises_when_missing(tmp_path):
 
 	with pytest.raises(IncompleteDownloadError):
 		directory.ensure_complete()
+
+
+async def test_series_directory_resume_reuses_existing_files(tmp_path):
+	requests = 0
+
+	async def handler(_):
+		nonlocal requests
+		requests += 1
+		return web.Response(body=b"fresh")
+
+	app = web.Application()
+	app.router.add_get("/", handler)
+	runner = web.AppRunner(app)
+	await runner.setup()
+	site = web.TCPSite(runner, "127.0.0.1", 0)
+	await site.start()
+	port = site._server.sockets[0].getsockname()[1]
+
+	directory = SeriesDirectory(tmp_path / "study", 1, "序列", 1, resume=True)
+	existing_path = directory.get(0, "dcm")
+	existing_path.write_bytes(b"cached")
+
+	client = new_http_client()
+	try:
+		result = await directory.download(client, 0, "dcm", f"http://127.0.0.1:{port}/", label="测试序列")
+		assert result == existing_path
+		assert existing_path.read_bytes() == b"cached"
+		assert requests == 0
+		assert existing_path.parent == tmp_path / "study" / "[1] 序列"
+	finally:
+		await client.close()
+		await runner.cleanup()
 
 
 def test_make_unique_dir():

@@ -152,18 +152,19 @@ async def download_bytes(client: aiohttp.ClientSession, url, *, headers=None, pa
 	return await retry_async(_once, label=text)
 
 
-async def download_to_path(client: aiohttp.ClientSession, path: Path, url, *, headers=None, params=None, label: str | None = None):
+async def download_to_path(client: aiohttp.ClientSession, path: Path, url, *, headers=None, params=None, label: str | None = None, resume: bool = False):
 	path = Path(path)
 	text = label or str(path)
 
 	async def _once():
 		path.parent.mkdir(parents=True, exist_ok=True)
 		temp = path.with_name(path.name + ".part")
-		temp.unlink(missing_ok=True)
-		size = 0
+		if resume and temp.exists():
+			temp.unlink()
 
 		try:
 			async with client.get(url, headers=headers, params=params) as response:
+				size = 0
 				with temp.open("wb") as fp:
 					async for chunk in response.content.iter_chunked(_DOWNLOAD_CHUNK_SIZE):
 						fp.write(chunk)
@@ -285,7 +286,7 @@ class SeriesDirectory:
 	影像文件的序号从 1 开始，符合一般人的习惯，其他地方仍然以 0 为起点。
 	"""
 
-	def __init__(self, study_dir: Path, number: Optional[int], desc: str, size: int, unique=True):
+	def __init__(self, study_dir: Path, number: Optional[int], desc: str, size: int, unique=True, resume=False):
 		if desc and number is None:
 			self._suggested = study_dir / pathify(desc)
 		elif desc:
@@ -296,6 +297,7 @@ class SeriesDirectory:
 			self._suggested = study_dir / str(number)
 
 		self._unique = unique
+		self._resume = resume
 		self._size = size
 		self._path = None
 		self._width = int(math.log10(size)) + 2
@@ -303,7 +305,7 @@ class SeriesDirectory:
 		self._skipped = set()
 
 	def make_dir(self):
-		if self._unique:
+		if self._unique and not (self._resume and self._suggested.is_dir()):
 			self._path = make_unique_dir(self._suggested)
 		else:
 			self._path = self._suggested
@@ -340,7 +342,10 @@ class SeriesDirectory:
 
 	async def download(self, client: aiohttp.ClientSession, index: int, extension: str, url, *, headers=None, params=None, label: str | None = None):
 		path = self.get(index, extension)
-		await download_to_path(client, path, url, headers=headers, params=params, label=label)
+		if self._resume and path.exists():
+			self.mark_complete(index)
+			return path
+		await download_to_path(client, path, url, headers=headers, params=params, label=label, resume=self._resume)
 		self.mark_complete(index)
 		return path
 

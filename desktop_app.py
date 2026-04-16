@@ -539,6 +539,7 @@ class MainWindow(QMainWindow):
 		self.open_button.setEnabled(False)
 		self.status_label.setText("任务启动中")
 		self.progress_bar.setRange(0, 0)
+		self.start_button.setText("开始下载")
 		self.start_button.setEnabled(False)
 		self.stop_button.setEnabled(True)
 		self.settings.setValue("output_dir", output_dir)
@@ -647,8 +648,10 @@ class MainWindow(QMainWindow):
 
 		if exit_code == 0:
 			self.status_label.setText("下载完成")
+			self.start_button.setText("开始下载")
 		else:
-			self.status_label.setText("下载失败")
+			self.status_label.setText("下载失败，可点击重试从断点继续")
+			self.start_button.setText("重试下载")
 
 		if self.process:
 			self.process.deleteLater()

@@ -251,7 +251,7 @@ async def run(url: str, *_):
 				continue
 
 			desc = str(series.get("seriesDesc") or "").strip() or "Unnamed"
-			directory = SeriesDirectory(save_to, _series_number(series), desc, len(images))
+			directory = SeriesDirectory(save_to, _series_number(series), desc, len(images), resume=True)
 			progress = tqdm(images, desc=desc, unit="张", file=sys.stdout)
 			try:
 				for index, image in enumerate(progress):
