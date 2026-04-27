@@ -5,7 +5,7 @@
 > 
 > 下载须知：
 > - 部分医院的系统复杂，需要较长的时间（数小时）才能爬取。
-> - 少数系统不提供原始文件，无法下载，已知有：`锐珂 CareaStream`、`联众医疗 eImage`、`东软睿影 cloud film system`
+> - 少数系统不提供原始文件，无法下载，已知有：`锐珂 CareaStream`、`联众医疗 eImage（非 Eunity viewer）`、`东软睿影 cloud film system`
 
 关于下载的格式：
 
@@ -40,6 +40,7 @@
   * [cloud.wehzsy.com](#cloudwehzsycom)
   * [medapi.dsrmyy.cn](#medapidsrmyycn)
   * [cyemis.bjcyh.mobi](#cyemisbjcyhmobi)
+  * [zjyx.gjwlyy.com](#zjyxgjwlyycom)
   * [film.radonline.cn](#filmradonlinecn)
   * [u.elincloud.cn](#uelincloudcn)
   * [lk-pacsview.rjh.com.cn](#lk-pacsviewrjhcomcn)
@@ -184,6 +185,23 @@ URL 格式：`https://mdmis.cq12320.cn/wcs1/mdmis-app/h5/#/share/detail?share_id
 ```
 python downloader.py <url>
 ```
+
+### zjyx.gjwlyy.com
+
+浙江大学医学院附属第二医院的联众 `Eunity` 分享页，支持以下入口：
+
+- `http://zjyx.gjwlyy.com/cloudfilmserver/cloudFilm/showShareReport.htm?key=<...>`
+- `https://zjyxview.gjwlyy.com/e/viewer?CLOAccessKeyID=<...>&arg=<...>`
+
+```
+python downloader.py <url>
+```
+
+注意：
+
+- 该站点的服务端返回 `CLOCLHAAR` 自有压缩数据，没有直接开放原始 DICOM P10。
+- 本项目通过 Playwright 在网页查看器内 hook `inverseHaar*` 解码函数，截获完整像素 tile 后重建 DICOM。
+- 下载结果不经过 `PNG/JPEG`，SOPClassUID 会按模态写为 `CT/MR/... Image Storage`；但文件头由本项目重建，不是源站原始 DICOM 文件的逐字节副本。
 
 ### efilm.fs-salon.cn
 

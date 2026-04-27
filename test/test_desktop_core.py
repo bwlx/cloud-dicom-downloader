@@ -30,6 +30,14 @@ from desktop_core import resolve_crawler_module, url_password_prompt, url_requir
 			"https://lk-pacsview.rjh.com.cn/web/fore-end/index.html#/check-detail-share?shareId=abc&xeguId=xyz&unitId=rjh",
 			"crawlers.rjh",
 		),
+		(
+			"http://zjyx.gjwlyy.com/cloudfilmserver/cloudFilm/showShareReport.htm?key=share-key-001",
+			"crawlers.gjwlyy",
+		),
+		(
+			"https://zjyxview.gjwlyy.com/e/viewer?CLOAccessKeyID=access-key-001&arg=viewer-arg-001",
+			"crawlers.gjwlyy",
+		),
 	],
 )
 def test_resolve_crawler_module(url, module_name):
