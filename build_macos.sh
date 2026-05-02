@@ -7,7 +7,20 @@ cd "$ROOT_DIR"
 VERSION="${1:-${BUILD_VERSION:-0.1.0}}"
 APP_NAME="Cloud DICOM Downloader.app"
 SAFE_VERSION="$(printf '%s' "$VERSION" | sed 's/[^0-9A-Za-z._-]/-/g')"
-DMG_NAME="Cloud-DICOM-Downloader-macOS-unsigned-${SAFE_VERSION}.dmg"
+MAC_ARCH="${2:-${MACOS_BUILD_ARCH:-$(uname -m)}}"
+case "$MAC_ARCH" in
+    x86_64|intel)
+        MAC_ARCH="intel"
+        ;;
+    arm64|apple-silicon|apple_silicon)
+        MAC_ARCH="apple-silicon"
+        ;;
+    *)
+        echo "Unsupported macOS architecture label: $MAC_ARCH" >&2
+        exit 1
+        ;;
+esac
+DMG_NAME="Cloud-DICOM-Downloader-macOS-${MAC_ARCH}-unsigned-${SAFE_VERSION}.dmg"
 STAGE_DIR="$ROOT_DIR/build/dmg"
 
 python -m pip install -r requirements-packaging.txt
