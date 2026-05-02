@@ -44,6 +44,7 @@
   * [film.radonline.cn](#filmradonlinecn)
   * [u.elincloud.cn](#uelincloudcn)
   * [lk-pacsview.rjh.com.cn](#lk-pacsviewrjhcomcn)
+  * [dicomviewer.*.kayicloud.com](#dicomviewerkayicloudcom)
 
 ## 使用步骤
 
@@ -361,3 +362,15 @@ python downloader.py <url>
 ```
 
 该爬虫依赖 Playwright 浏览器自动化，在网页查看器内通过 `dicomProvider.getImageFileAsync` 逐张获取 DICOM 文件。
+
+### dicomviewer.*.kayicloud.com
+
+浙江卡易智慧医疗科技 HIDOS AI_PACS 无极云影像平台，URL 格式为：
+
+- `https://dicomviewer.<hospital>.kayicloud.com/?HospitalCode=<...>&AccessionNo=<...>&serverAddr=<base64>&Token=<jwt>&Anony=2`
+
+通常从医院公众号或报告单二维码得到。
+
+```
+python downloader.py <url>
+```
