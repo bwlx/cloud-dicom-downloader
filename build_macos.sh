@@ -7,6 +7,7 @@ cd "$ROOT_DIR"
 VERSION="${1:-${BUILD_VERSION:-0.1.0}}"
 APP_NAME="Cloud DICOM Downloader.app"
 SAFE_VERSION="$(printf '%s' "$VERSION" | sed 's/[^0-9A-Za-z._-]/-/g')"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
 MAC_ARCH="${2:-${MACOS_BUILD_ARCH:-$(uname -m)}}"
 case "$MAC_ARCH" in
     x86_64|intel)
@@ -20,15 +21,42 @@ case "$MAC_ARCH" in
         exit 1
         ;;
 esac
+if [ "$MAC_ARCH" = "intel" ]; then
+    TARGET_MACHINE="x86_64"
+else
+    TARGET_MACHINE="arm64"
+fi
 DMG_NAME="Cloud-DICOM-Downloader-macOS-${MAC_ARCH}-unsigned-${SAFE_VERSION}.dmg"
 STAGE_DIR="$ROOT_DIR/build/dmg"
+APP_EXE="dist/$APP_NAME/Contents/MacOS/Cloud DICOM Downloader"
 
-python -m pip install -r requirements-packaging.txt
-python -m playwright install chromium
-python -m PyInstaller --noconfirm cloud_dicom_downloader.spec
-codesign --remove-signature "dist/$APP_NAME" 2>/dev/null || true
+PYTHON_MACHINE="$($PYTHON_BIN - <<'PY'
+import platform
+print(platform.machine())
+PY
+)"
 
-python - <<'PY'
+if [ "$PYTHON_MACHINE" != "$TARGET_MACHINE" ]; then
+    echo "Python interpreter arch ($PYTHON_MACHINE) does not match requested macOS target ($TARGET_MACHINE)." >&2
+    echo "Use a native $TARGET_MACHINE Python interpreter before running build_macos.sh." >&2
+    exit 1
+fi
+
+$PYTHON_BIN -m pip install -r requirements-packaging.txt
+$PYTHON_BIN -m playwright install chromium
+$PYTHON_BIN -m PyInstaller --noconfirm cloud_dicom_downloader.spec
+
+BUILT_ARCHS="$(lipo -archs "$APP_EXE")"
+case " $BUILT_ARCHS " in
+    *" $TARGET_MACHINE "*)
+        ;;
+    *)
+        echo "Built app archs ($BUILT_ARCHS) do not include expected target $TARGET_MACHINE." >&2
+        exit 1
+        ;;
+esac
+
+$PYTHON_BIN - <<'PY'
 import os
 import shutil
 import sys
@@ -73,6 +101,8 @@ if not copied:
     raise SystemExit("No Playwright browser cache directories found for macOS packaging.")
 PY
 
+codesign --force --deep --sign - "dist/$APP_NAME"
+
 rm -rf "$STAGE_DIR" "dist/$DMG_NAME"
 mkdir -p "$STAGE_DIR"
 cp -R "dist/$APP_NAME" "$STAGE_DIR/"
@@ -87,4 +117,4 @@ hdiutil create \
 
 echo "Built dist/$APP_NAME"
 echo "Built dist/$DMG_NAME"
-echo "Note: the app is unsigned. For external distribution on macOS, sign and notarize it before release."
+echo "Note: the app is ad-hoc signed only. For external distribution on macOS, sign with a Developer ID certificate and notarize it before release."

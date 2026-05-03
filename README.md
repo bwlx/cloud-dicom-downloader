@@ -78,7 +78,8 @@ python desktop_app.py
 
 脚本会安装打包依赖、补齐 Playwright 的 Chromium、生成 `.app` 和 `.dmg`，产物位于 `dist/` 目录。
 如果要指定版本号，也可以执行 `./build_macos.sh 0.1.0`，生成带版本号的 dmg 文件名。
-当前脚本生成的是未签名安装包；如果要在外部分发，还需要自行做 Apple 签名和 notarization。
+在 Apple Silicon 机器上请使用原生 `arm64` 的 Python 打包，不要在 Rosetta 下用 `x86_64` Python 直接构建，否则产出的 `.app` 仍然会是 Intel 架构。
+当前脚本会做本地 ad-hoc 签名，避免 `.app` 在本机直接打不开；如果要在外部分发，还需要自行做 Apple Developer ID 签名和 notarization。
 
 ### 打包 Windows 版本
 
