@@ -130,10 +130,9 @@ python -m pip install --upgrade pip
 
 - `Cloud-DICOM-Downloader-windows-<version>.zip`
 - `Cloud-DICOM-Downloader-Setup-<version>.exe`
-- `Cloud-DICOM-Downloader-macOS-intel-unsigned-<version>.dmg`
 - `Cloud-DICOM-Downloader-macOS-apple-silicon-unsigned-<version>.dmg`
 
-macOS 产物会分别在 Intel 和 Apple Silicon runner 上构建，避免单架构 `.app` 在另一种机器上无法启动。
+macOS 产物固定在 Apple Silicon runner 上构建，仅发布 Apple Silicon 安装包。
 
 建议的发版命令：
 
