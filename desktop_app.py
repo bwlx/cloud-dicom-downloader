@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import multiprocessing
 import platform
 import re
 import tempfile
@@ -7,6 +8,69 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Cloud DICOM Downloader"
+BASE_DIR = Path(__file__).resolve().parent
+_SAVE_PATTERNS = (
+	re.compile(r"保存到[:：]\s*(.+)"),
+	re.compile(r"下载完成，保存位置\s*(.+)"),
+	re.compile(r"下载.+?到[:：]\s*(.+)"),
+)
+
+
+def build_worker_arguments(request) -> list[str]:
+	args = ["--worker", request.url]
+
+	if request.password:
+		args.extend(["--password", request.password])
+	if request.raw:
+		args.append("--raw")
+	if request.output_dir:
+		args.extend(["--output", request.output_dir])
+
+	return args
+
+
+def default_output_dir() -> str:
+	downloads_dir = Path.home() / "Downloads" / "cloud-dicom-downloader"
+	return str(downloads_dir)
+
+
+def worker_entry(argv: list[str]) -> int:
+	from desktop_core import DownloadRequest, run_download_request
+
+	parser = argparse.ArgumentParser()
+	parser.add_argument("--worker", action="store_true")
+	parser.add_argument("--password")
+	parser.add_argument("--raw", action="store_true")
+	parser.add_argument("--output")
+	parser.add_argument("url")
+	args = parser.parse_args(argv)
+
+	request = DownloadRequest(
+		url=args.url,
+		password=args.password,
+		raw=args.raw,
+		output_dir=args.output,
+	)
+
+	try:
+		asyncio.run(run_download_request(request))
+	except Exception as exc:
+		print(f"错误: {exc}", file=sys.stderr)
+		return 1
+
+	return 0
+
+
+def _dispatch_early_subprocess_modes() -> int | None:
+	multiprocessing.freeze_support()
+	if "--worker" in sys.argv[1:]:
+		return worker_entry(sys.argv[1:])
+	return None
+
+
+_early_exit_code = _dispatch_early_subprocess_modes()
+if _early_exit_code is not None:
+	raise SystemExit(_early_exit_code)
 
 
 def _qt_import_search_roots() -> list[Path]:
@@ -108,56 +172,6 @@ from desktop_encoding import ProcessOutputBuffer
 from desktop_qr import decode_qr_image, pick_share_url
 from crawlers import jdyfy
 from runtime_config import DOWNLOAD_ROOT_ENV
-
-BASE_DIR = Path(__file__).resolve().parent
-_SAVE_PATTERNS = (
-	re.compile(r"保存到[:：]\s*(.+)"),
-	re.compile(r"下载完成，保存位置\s*(.+)"),
-	re.compile(r"下载.+?到[:：]\s*(.+)"),
-)
-
-
-def build_worker_arguments(request: DownloadRequest) -> list[str]:
-	args = ["--worker", request.url]
-
-	if request.password:
-		args.extend(["--password", request.password])
-	if request.raw:
-		args.append("--raw")
-	if request.output_dir:
-		args.extend(["--output", request.output_dir])
-
-	return args
-
-
-def default_output_dir() -> str:
-	downloads_dir = Path.home() / "Downloads" / "cloud-dicom-downloader"
-	return str(downloads_dir)
-
-
-def worker_entry(argv: list[str]) -> int:
-	parser = argparse.ArgumentParser()
-	parser.add_argument("--worker", action="store_true")
-	parser.add_argument("--password")
-	parser.add_argument("--raw", action="store_true")
-	parser.add_argument("--output")
-	parser.add_argument("url")
-	args = parser.parse_args(argv)
-
-	request = DownloadRequest(
-		url=args.url,
-		password=args.password,
-		raw=args.raw,
-		output_dir=args.output,
-	)
-
-	try:
-		asyncio.run(run_download_request(request))
-	except Exception as exc:
-		print(f"错误: {exc}", file=sys.stderr)
-		return 1
-
-	return 0
 
 
 def format_study_option(study: dict) -> str:
