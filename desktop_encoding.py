@@ -1,5 +1,38 @@
 import codecs
+import io
 import locale
+import sys
+
+
+def _configure_stream(stream, *, encoding: str, errors: str):
+	if stream is None:
+		return stream
+
+	try:
+		stream.reconfigure(encoding=encoding, errors=errors)
+		return stream
+	except (AttributeError, ValueError, OSError):
+		pass
+
+	buffer = getattr(stream, "buffer", None)
+	if buffer is None:
+		return stream
+
+	try:
+		return io.TextIOWrapper(buffer, encoding=encoding, errors=errors, line_buffering=True, write_through=True)
+	except (AttributeError, ValueError, OSError):
+		return stream
+
+
+def configure_text_output(encoding: str = "utf-8", errors: str = "backslashreplace"):
+	"""
+	Force process logs/progress bars to be printable on Windows.
+
+	Some hospital metadata contains symbols such as superscript numbers. A default
+	GBK stdout/stderr crashes on those before the GUI can show the real status.
+	"""
+	sys.stdout = _configure_stream(sys.stdout, encoding=encoding, errors=errors)
+	sys.stderr = _configure_stream(sys.stderr, encoding=encoding, errors=errors)
 
 
 def _is_cjk(char: str) -> bool:

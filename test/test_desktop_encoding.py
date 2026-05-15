@@ -1,4 +1,7 @@
-from desktop_encoding import ProcessOutputBuffer, decode_process_output
+import io
+import sys
+
+from desktop_encoding import ProcessOutputBuffer, configure_text_output, decode_process_output
 
 
 def test_decode_process_output_prefers_utf8_for_chinese_text():
@@ -33,3 +36,25 @@ def test_process_output_buffer_flushes_tail_without_newline():
 	assert buffer.feed(raw[:5]) == ""
 	assert buffer.feed(raw[5:]) == ""
 	assert buffer.flush() == text
+
+
+def test_configure_text_output_replaces_gbk_stdout(monkeypatch):
+	raw = io.BytesIO()
+	stream = io.TextIOWrapper(raw, encoding="gbk", errors="strict", write_through=True)
+	monkeypatch.setattr(sys, "stdout", stream)
+
+	configure_text_output()
+	print("WATER: 3ph²+C")
+
+	assert raw.getvalue().decode("utf-8").strip() == "WATER: 3ph²+C"
+
+
+def test_configure_text_output_handles_surrogates(monkeypatch):
+	raw = io.BytesIO()
+	stream = io.TextIOWrapper(raw, encoding="gbk", errors="strict", write_through=True)
+	monkeypatch.setattr(sys, "stderr", stream)
+
+	configure_text_output()
+	print("bad\udcff", file=sys.stderr)
+
+	assert raw.getvalue().decode("utf-8").strip() == r"bad\udcff"

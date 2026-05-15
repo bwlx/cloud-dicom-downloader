@@ -35,7 +35,10 @@ def default_output_dir() -> str:
 
 
 def worker_entry(argv: list[str]) -> int:
+	from desktop_encoding import configure_text_output
 	from desktop_core import DownloadRequest, run_download_request
+
+	configure_text_output()
 
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--worker", action="store_true")
@@ -565,7 +568,7 @@ class MainWindow(QMainWindow):
 		env = QProcessEnvironment.systemEnvironment()
 		env.insert("PYTHONUNBUFFERED", "1")
 		env.insert("PYTHONUTF8", "1")
-		env.insert("PYTHONIOENCODING", "utf-8")
+		env.insert("PYTHONIOENCODING", "utf-8:backslashreplace")
 		env.insert(DOWNLOAD_ROOT_ENV, output_dir)
 		process.setProcessEnvironment(env)
 

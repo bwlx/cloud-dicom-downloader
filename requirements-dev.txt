@@ -12,3 +12,4 @@ pylibjpeg-rle~=2.0
 
 # Test dependencies
 pytest~=8.4
+pytest-asyncio~=1.2

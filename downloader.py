@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 
+from desktop_encoding import configure_text_output
 from desktop_core import DownloadRequest, run_download_request
 
 
@@ -14,6 +15,7 @@ def parse_args(argv=None):
 
 
 async def main(argv=None):
+	configure_text_output()
 	args = parse_args(argv)
 	request = DownloadRequest(
 		url=args.url,

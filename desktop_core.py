@@ -8,6 +8,7 @@ from typing import Iterator
 from yarl import URL
 
 from crawlers import cq12320, efilmcloud, fssalon, ftimage, gjwlyy, hinacom, jdyfy, kayicloud, medapi, mtywcloud, neusoft, radonline, rjh, shdc, sugh, szjudianyun, wlycloud, ydyy, yzhcloud, zscloud, wehzsy
+from desktop_encoding import configure_text_output
 from runtime_config import DOWNLOAD_ROOT_ENV
 
 
@@ -103,6 +104,7 @@ def configured_output_dir(output_dir: str | None) -> Iterator[None]:
 
 
 async def run_download_request(request: DownloadRequest):
+	configure_text_output()
 	module_ = resolve_crawler_module(request.url)
 	args = [request.url]
 
