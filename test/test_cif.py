@@ -1,3 +1,4 @@
+import pytest
 from yarl import URL
 from pydicom import dcmread
 
@@ -5,6 +6,7 @@ from crawlers.cif import (
 	CifAccess,
 	CifLink,
 	_image_entries,
+	_normalize_pixel_data,
 	_parse_cif_access,
 	_parse_cif_link,
 	_person_name,
@@ -109,3 +111,16 @@ def test_write_dicom_from_zfp_raw_pixels(tmp_path):
 	assert ds.Columns == 2
 	assert ds.InstanceNumber == 7
 	assert ds.PixelData == b"\x01\x00\x02\x00\x03\x00\x04\x00"
+
+
+def test_normalize_pixel_data_trims_zfp_trailing_bytes():
+	header = {"Rows": "2", "Columns": "2", "SamplesPerPixel": "1", "BitsAllocated": "16"}
+	assert _normalize_pixel_data(header, b"\x01\x00\x02\x00\x03\x00\x04\x00EXTRA") == (
+		b"\x01\x00\x02\x00\x03\x00\x04\x00"
+	)
+
+
+def test_normalize_pixel_data_rejects_short_payload():
+	header = {"Rows": "2", "Columns": "2", "SamplesPerPixel": "1", "BitsAllocated": "16"}
+	with pytest.raises(ValueError, match="影像像素数据不完整"):
+		_normalize_pixel_data(header, b"\x01\x00")

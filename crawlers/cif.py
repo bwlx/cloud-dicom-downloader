@@ -34,6 +34,7 @@ _ZFP_HOOK_SCRIPT = r"""
 	const hook = window.__cloudDicomZfpHook = {
 		sockets: [],
 		studySocket: null,
+		imageSocket: null,
 		pending: new Map(),
 		headerToken: null,
 		pixelToken: null,
@@ -53,7 +54,6 @@ _ZFP_HOOK_SCRIPT = r"""
 		const token = hook.pixelToken;
 		const pending = token ? hook.pending.get(token) : null;
 		if (!pending || pending.phase !== "pixel") return;
-		if (pending.expectedBytes && buffer.byteLength !== pending.expectedBytes) return;
 
 		hook.pixelToken = null;
 		hook.pending.delete(token);
@@ -110,8 +110,11 @@ _ZFP_HOOK_SCRIPT = r"""
 			if (typeof data === "string" && data.startsWith("{")) {
 				try {
 					const command = JSON.parse(data);
-					if (command.CommandName === "CMDGETOBJ" && !hook.pending.has(command.Token)) {
-						return;
+					if (command.CommandName === "CMDGETOBJ") {
+						hook.imageSocket = ws;
+						if (!hook.pending.has(command.Token)) {
+							return;
+						}
 					}
 					if (["CMDGETTHUMBNAIL", "CMDNETWORKSPEED"].includes(command.CommandName)) {
 						return;
@@ -135,8 +138,14 @@ _ZFP_HOOK_SCRIPT = r"""
 		!!hook.studySocket && hook.studySocket.readyState === NativeWebSocket.OPEN
 	);
 
+	window.__cloudDicomZfpImageSocketReady = () => (
+		!!hook.imageSocket && hook.imageSocket.readyState === NativeWebSocket.OPEN
+	);
+
 	window.__cloudDicomZfpGetImage = (token) => new Promise((resolve, reject) => {
-		const ws = hook.studySocket || hook.sockets.find((item) => item.readyState === NativeWebSocket.OPEN);
+		const ws = (hook.imageSocket && hook.imageSocket.readyState === NativeWebSocket.OPEN)
+			? hook.imageSocket
+			: (hook.studySocket || hook.sockets.find((item) => item.readyState === NativeWebSocket.OPEN));
 		if (!ws) {
 			reject(new Error("影像 WebSocket 尚未连接。"));
 			return;
@@ -342,6 +351,23 @@ def _float_text(value):
 	return str(value)
 
 
+def _expected_pixel_bytes(header: dict) -> int:
+	rows = int(header["Rows"])
+	columns = int(header["Columns"])
+	samples = int(header.get("SamplesPerPixel") or 1)
+	bits_allocated = int(header.get("BitsAllocated") or 8)
+	return rows * columns * samples * ((bits_allocated + 7) // 8)
+
+
+def _normalize_pixel_data(header: dict, pixel_data: bytes) -> bytes:
+	expected = _expected_pixel_bytes(header)
+	if len(pixel_data) == expected:
+		return pixel_data
+	if len(pixel_data) > expected:
+		return pixel_data[:expected]
+	raise ValueError(f"影像像素数据不完整：实际 {len(pixel_data)} 字节，期望 {expected} 字节。")
+
+
 def _set_if_present(ds: Dataset, attr: str, value):
 	if value not in (None, ""):
 		setattr(ds, attr, value)
@@ -424,6 +450,13 @@ async def _open_zfp_page(context, zfp_url: str) -> tuple[Page, dict]:
 	await page.add_init_script(_ZFP_HOOK_SCRIPT)
 	study = await _wait_zfp_metadata(page, zfp_url)
 	await page.wait_for_function("window.__cloudDicomZfpReady && window.__cloudDicomZfpReady()", timeout=60000)
+	try:
+		await page.wait_for_function(
+			"window.__cloudDicomZfpImageSocketReady && window.__cloudDicomZfpImageSocketReady()",
+			timeout=5000,
+		)
+	except Exception:
+		pass
 	return page, study
 
 
@@ -510,7 +543,7 @@ def _write_dicom(study: dict, series: dict, sop: dict, header: dict, pixel_data:
 	ds.BitsStored = int(header.get("BitsStored") or ds.BitsAllocated)
 	ds.HighBit = int(header.get("HighBit") or (ds.BitsStored - 1))
 	ds.PixelRepresentation = int(header.get("PixelRepresentation") or 0)
-	ds.PixelData = pixel_data
+	ds.PixelData = _normalize_pixel_data(header, pixel_data)
 
 	filename.parent.mkdir(parents=True, exist_ok=True)
 	temp = filename.with_name(filename.name + ".part")
