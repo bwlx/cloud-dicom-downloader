@@ -14,8 +14,15 @@ from crawlers.cif import (
 )
 
 
-def test_parse_cif_link():
+def test_parse_cif_login_link():
 	address = URL("http://ge.jstumor.jszlyy.com.cn:8080/CIF/user/loginAccCode?urlParam=URL-PARAM-001")
+	assert _parse_cif_link(address) == CifLink(url_param="URL-PARAM-001")
+	assert requires_authority_code(str(address))
+	assert authority_code_prompt(str(address)) == "访问码"
+
+
+def test_parse_cif_film_link():
+	address = URL("http://ge.jstumor.jszlyy.com.cn:8080/CIF/film?urlParam=URL-PARAM-001")
 	assert _parse_cif_link(address) == CifLink(url_param="URL-PARAM-001")
 	assert requires_authority_code(str(address))
 	assert authority_code_prompt(str(address)) == "访问码"

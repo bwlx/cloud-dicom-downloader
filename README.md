@@ -213,12 +213,14 @@ python downloader.py <url>
 江苏省肿瘤医院 CIF 云胶片入口，URL 格式为：
 
 - `http://ge.jstumor.jszlyy.com.cn:8080/CIF/user/loginAccCode?urlParam=<token>`
+- `http://ge.jstumor.jszlyy.com.cn:8080/CIF/film?urlParam=<token>`
 
 ```
 python downloader.py <url> <access-code>
 ```
 
 该站点需要输入报告单上的访问码。程序会先通过 CIF 接口验证访问码，再进入 GE ZFP 查看器，通过浏览器内 WebSocket 获取 RAW 像素并重建为 `.dcm` 文件。
+如果下载中途因 ZFP 单张影像响应超时而中断，重新对同一链接和保存目录发起下载会跳过已经完成的 `.dcm` 文件继续下载。
 
 ### efilm.fs-salon.cn
 

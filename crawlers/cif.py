@@ -16,11 +16,14 @@ from tqdm import tqdm
 from yarl import URL
 
 from crawlers._browser import launch_browser
-from crawlers._utils import SeriesDirectory, make_unique_dir, new_http_client, suggest_save_dir
+from crawlers._utils import SeriesDirectory, new_http_client, suggest_save_dir
 
 _HOST = "ge.jstumor.jszlyy.com.cn"
-_CIF_LOGIN_PATH = "/CIF/user/loginAccCode"
+_CIF_PATHS = {"/CIF/user/loginAccCode", "/CIF/film"}
 _API_BASE_PATH = "/cloudFilmDataLogicApi"
+_IMAGE_DOWNLOAD_ATTEMPTS = 4
+_IMAGE_RECONNECT_ATTEMPT = 3
+_IMAGE_RETRY_DELAY_SECONDS = 2
 
 _ZFP_HOOK_SCRIPT = r"""
 (() => {
@@ -32,6 +35,8 @@ _ZFP_HOOK_SCRIPT = r"""
 		sockets: [],
 		studySocket: null,
 		pending: new Map(),
+		headerToken: null,
+		pixelToken: null,
 	};
 
 	function toBase64(buffer) {
@@ -45,16 +50,17 @@ _ZFP_HOOK_SCRIPT = r"""
 	}
 
 	function resolveBinary(buffer) {
-		for (const [token, pending] of hook.pending) {
-			if (pending.phase !== "pixel") continue;
-			if (pending.expectedBytes && buffer.byteLength !== pending.expectedBytes) continue;
-			hook.pending.delete(token);
-			pending.resolve({
-				headerText: pending.headerText,
-				dataB64: toBase64(buffer),
-			});
-			return;
-		}
+		const token = hook.pixelToken;
+		const pending = token ? hook.pending.get(token) : null;
+		if (!pending || pending.phase !== "pixel") return;
+		if (pending.expectedBytes && buffer.byteLength !== pending.expectedBytes) return;
+
+		hook.pixelToken = null;
+		hook.pending.delete(token);
+		pending.resolve({
+			headerText: pending.headerText,
+			dataB64: toBase64(buffer),
+		});
 	}
 
 	function handleMessage(event) {
@@ -63,12 +69,15 @@ _ZFP_HOOK_SCRIPT = r"""
 			if (data.startsWith("CMDGETOBJ ")) {
 				const token = data.split(" ")[1];
 				const pending = hook.pending.get(token);
+				hook.headerToken = pending ? token : null;
 				if (pending) pending.phase = "header";
 				return;
 			}
 			if (data.startsWith("{")) {
-				for (const pending of hook.pending.values()) {
-					if (pending.phase !== "header") continue;
+				const token = hook.headerToken;
+				const pending = token ? hook.pending.get(token) : null;
+				hook.headerToken = null;
+				if (pending && pending.phase === "header") {
 					pending.headerText = data;
 					try {
 						const header = JSON.parse(data);
@@ -78,7 +87,7 @@ _ZFP_HOOK_SCRIPT = r"""
 						pending.expectedBytes = 0;
 					}
 					pending.phase = "pixel";
-					break;
+					hook.pixelToken = token;
 				}
 			}
 			return;
@@ -97,6 +106,19 @@ _ZFP_HOOK_SCRIPT = r"""
 		ws.send = (data) => {
 			if (typeof data === "string" && data.includes("CMDGETOPTIMIZEDSTUDY")) {
 				hook.studySocket = ws;
+			}
+			if (typeof data === "string" && data.startsWith("{")) {
+				try {
+					const command = JSON.parse(data);
+					if (command.CommandName === "CMDGETOBJ" && !hook.pending.has(command.Token)) {
+						return;
+					}
+					if (["CMDGETTHUMBNAIL", "CMDNETWORKSPEED"].includes(command.CommandName)) {
+						return;
+					}
+				} catch {
+					// Not a JSON command; pass it through unchanged.
+				}
 			}
 			return nativeSend(data);
 		};
@@ -122,9 +144,12 @@ _ZFP_HOOK_SCRIPT = r"""
 
 		const timer = setTimeout(() => {
 			hook.pending.delete(token);
+			if (hook.headerToken === token) hook.headerToken = null;
+			if (hook.pixelToken === token) hook.pixelToken = null;
 			reject(new Error(`影像响应超时：${token}`));
-		}, 45000);
+		}, 90000);
 
+		hook.pending.delete(token);
 		hook.pending.set(token, {
 			phase: "command",
 			resolve: (value) => {
@@ -172,7 +197,7 @@ class ZfpImageEntry:
 
 
 def _parse_cif_link(address: URL) -> CifLink:
-	if address.host != _HOST or address.path != _CIF_LOGIN_PATH:
+	if address.host != _HOST or address.path not in _CIF_PATHS:
 		raise ValueError("当前链接不是受支持的 CIF 云影像分享链接。")
 
 	url_param = str(address.query.get("urlParam") or "").strip()
@@ -351,7 +376,7 @@ def _study_save_dir(study: dict) -> Path:
 	name = _person_name(study.get("PatientName")) or "匿名"
 	description = str(study.get("StudyDescription") or study.get("AccessionNumber") or "云影像").strip() or "云影像"
 	time_key = _date_value(study.get("StudyDate")) or str(study.get("StudyInstanceUid") or "study")
-	return make_unique_dir(suggest_save_dir(name, description, time_key))
+	return suggest_save_dir(name, description, time_key)
 
 
 def _token_sort_key(entry: ZfpImageEntry):
@@ -392,6 +417,45 @@ async def _download_zfp_image(page: Page, entry: ZfpImageEntry) -> tuple[dict, b
 	header = json.loads(result["headerText"])
 	data = base64.b64decode(result["dataB64"])
 	return header, data
+
+
+async def _open_zfp_page(context, zfp_url: str) -> tuple[Page, dict]:
+	page = await context.new_page()
+	await page.add_init_script(_ZFP_HOOK_SCRIPT)
+	study = await _wait_zfp_metadata(page, zfp_url)
+	await page.wait_for_function("window.__cloudDicomZfpReady && window.__cloudDicomZfpReady()", timeout=60000)
+	return page, study
+
+
+async def _reopen_zfp_page(context, old_page: Page, zfp_url: str) -> Page:
+	print("ZFP 连接可能已阻塞，正在重新打开查看器继续下载。", file=sys.stderr)
+	try:
+		await old_page.close()
+	except Exception:
+		pass
+	page, _ = await _open_zfp_page(context, zfp_url)
+	return page
+
+
+async def _download_zfp_image_with_retries(context, page: Page, zfp_url: str, entry: ZfpImageEntry, label: str):
+	for attempt in range(1, _IMAGE_DOWNLOAD_ATTEMPTS + 1):
+		try:
+			header, pixel_data = await _download_zfp_image(page, entry)
+			return page, header, pixel_data
+		except Exception as exc:
+			if attempt >= _IMAGE_DOWNLOAD_ATTEMPTS:
+				raise RuntimeError(f"{label} 下载失败，已重试 {attempt} 次：{exc}") from exc
+
+			print(
+				f"{label} 下载失败，正在重试（第 {attempt + 1} 次，共 {_IMAGE_DOWNLOAD_ATTEMPTS} 次）：{exc}",
+				file=sys.stderr,
+			)
+			if attempt >= _IMAGE_RECONNECT_ATTEMPT - 1:
+				page = await _reopen_zfp_page(context, page, zfp_url)
+			else:
+				await asyncio.sleep(_IMAGE_RETRY_DELAY_SECONDS)
+
+	raise AssertionError("unreachable")
 
 
 def _write_dicom(study: dict, series: dict, sop: dict, header: dict, pixel_data: bytes, filename: Path):
@@ -464,10 +528,7 @@ async def _download_zfp_study(zfp_url: str):
 		browser = await launch_browser(driver, headless=True)
 		try:
 			async with await browser.new_context() as context:
-				page = await context.new_page()
-				await page.add_init_script(_ZFP_HOOK_SCRIPT)
-				study = await _wait_zfp_metadata(page, zfp_url)
-				await page.wait_for_function("window.__cloudDicomZfpReady && window.__cloudDicomZfpReady()", timeout=60000)
+				page, study = await _open_zfp_page(context, zfp_url)
 
 				entries = sorted(_image_entries(study), key=_token_sort_key)
 				if not entries:
@@ -480,19 +541,37 @@ async def _download_zfp_study(zfp_url: str):
 
 				progress = tqdm(entries, unit="张", file=sys.stdout)
 				directories: dict[str, SeriesDirectory] = {}
-				for index, entry in enumerate(progress):
-					series_uid = str(entry.series.get("SeriesInstanceUid") or index)
+				series_key_by_object: dict[int, str] = {}
+				series_sizes: dict[str, int] = {}
+				for entry in entries:
+					series_uid = str(entry.series.get("SeriesInstanceUid") or "").strip()
+					if not series_uid:
+						series_uid = series_key_by_object.setdefault(
+							id(entry.series), f"series-{len(series_key_by_object) + 1}"
+						)
+					series_sizes[series_uid] = series_sizes.get(series_uid, 0) + 1
+
+				series_indices: dict[str, int] = {}
+				for entry in progress:
+					series_uid = str(entry.series.get("SeriesInstanceUid") or "").strip()
+					if not series_uid:
+						series_uid = series_key_by_object[id(entry.series)]
+					local_index = series_indices.get(series_uid, 0)
+					series_indices[series_uid] = local_index + 1
 					desc = str(entry.series.get("SeriesDescription") or entry.series.get("SeriesModality") or "Unnamed").strip() or "Unnamed"
 					directory = directories.get(series_uid)
 					if directory is None:
-						size = sum(1 for item in entries if item.series is entry.series)
-						directory = SeriesDirectory(save_to, _series_number(entry.series), desc, size)
+						directory = SeriesDirectory(save_to, _series_number(entry.series), desc, series_sizes[series_uid], resume=True)
 						directories[series_uid] = directory
 
 					progress.set_description(desc)
-					header, pixel_data = await _download_zfp_image(page, entry)
-					local_index = sum(1 for item in entries[:index] if item.series is entry.series)
 					path = directory.get(local_index, "dcm")
+					if path.exists():
+						directory.mark_complete(local_index)
+						continue
+
+					label = f"{desc} 第 {local_index + 1} 张"
+					page, header, pixel_data = await _download_zfp_image_with_retries(context, page, zfp_url, entry, label)
 					_write_dicom(study, entry.series, entry.sop, header, pixel_data, path)
 					directory.mark_complete(local_index)
 
