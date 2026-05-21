@@ -7,7 +7,7 @@ from typing import Iterator
 
 from yarl import URL
 
-from crawlers import cq12320, efilmcloud, fssalon, ftimage, gjwlyy, hinacom, jdyfy, kayicloud, medapi, mtywcloud, neusoft, radonline, rjh, shdc, sugh, szjudianyun, wlycloud, ydyy, yzhcloud, zscloud, wehzsy
+from crawlers import cif, cq12320, efilmcloud, fssalon, ftimage, gjwlyy, hinacom, jdyfy, kayicloud, medapi, mtywcloud, neusoft, radonline, rjh, shdc, sugh, szjudianyun, wlycloud, ydyy, yzhcloud, zscloud, wehzsy
 from desktop_encoding import configure_text_output
 from runtime_config import DOWNLOAD_ROOT_ENV
 
@@ -65,20 +65,22 @@ def resolve_crawler_module(url: str) -> ModuleType:
 		return radonline
 	if host == "lk-pacsview.rjh.com.cn":
 		return rjh
+	if host == "ge.jstumor.jszlyy.com.cn":
+		return cif
 
 	raise ValueError("不支持的网站，详情见 README.md")
 
 
 def url_requires_password(url: str) -> bool:
 	host = URL(url).host or ""
-	return host.endswith(".medicalimagecloud.com") or jdyfy.requires_authority_code(url) or ydyy.requires_authority_code(url)
+	return host.endswith(".medicalimagecloud.com") or cif.requires_authority_code(url) or jdyfy.requires_authority_code(url) or ydyy.requires_authority_code(url)
 
 
 def url_password_prompt(url: str) -> str | None:
 	host = URL(url).host or ""
 	if host.endswith(".medicalimagecloud.com"):
 		return "访问密码"
-	return jdyfy.authority_code_prompt(url) or ydyy.authority_code_prompt(url)
+	return cif.authority_code_prompt(url) or jdyfy.authority_code_prompt(url) or ydyy.authority_code_prompt(url)
 
 
 def url_supports_raw(url: str) -> bool:

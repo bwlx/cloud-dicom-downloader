@@ -41,6 +41,7 @@
   * [medapi.dsrmyy.cn](#medapidsrmyycn)
   * [cyemis.bjcyh.mobi](#cyemisbjcyhmobi)
   * [zjyx.gjwlyy.com](#zjyxgjwlyycom)
+  * [ge.jstumor.jszlyy.com.cn](#gejstumorjszlyycomcn)
   * [film.radonline.cn](#filmradonlinecn)
   * [u.elincloud.cn](#uelincloudcn)
   * [lk-pacsview.rjh.com.cn](#lk-pacsviewrjhcomcn)
@@ -206,6 +207,18 @@ python downloader.py <url>
 - 该站点的服务端返回 `CLOCLHAAR` 自有压缩数据，没有直接开放原始 DICOM P10。
 - 本项目通过 Playwright 在网页查看器内 hook `inverseHaar*` 解码函数，截获完整像素 tile 后重建 DICOM。
 - 下载结果不经过 `PNG/JPEG`，SOPClassUID 会按模态写为 `CT/MR/... Image Storage`；但文件头由本项目重建，不是源站原始 DICOM 文件的逐字节副本。
+
+### ge.jstumor.jszlyy.com.cn
+
+江苏省肿瘤医院 CIF 云胶片入口，URL 格式为：
+
+- `http://ge.jstumor.jszlyy.com.cn:8080/CIF/user/loginAccCode?urlParam=<token>`
+
+```
+python downloader.py <url> <access-code>
+```
+
+该站点需要输入报告单上的访问码。程序会先通过 CIF 接口验证访问码，再进入 GE ZFP 查看器，通过浏览器内 WebSocket 获取 RAW 像素并重建为 `.dcm` 文件。
 
 ### efilm.fs-salon.cn
 
