@@ -7,7 +7,7 @@ from typing import Iterator
 
 from yarl import URL
 
-from crawlers import cif, cq12320, efilmcloud, fssalon, ftimage, gjwlyy, hinacom, jdyfy, kayicloud, medapi, mtywcloud, neusoft, radonline, rjh, shdc, sugh, szjudianyun, wlycloud, ydyy, yzhcloud, zscloud, wehzsy, zy91
+from crawlers import cif, cq12320, efilmcloud, fssalon, ftimage, gjwlyy, hinacom, jdyfy, kayicloud, ljjk, medapi, mtywcloud, neusoft, radonline, rjh, shdc, sugh, szjudianyun, wlycloud, ydyy, yzhcloud, zscloud, wehzsy, zy91
 from desktop_encoding import configure_text_output
 from runtime_config import DOWNLOAD_ROOT_ENV
 
@@ -69,6 +69,8 @@ def resolve_crawler_module(url: str) -> ModuleType:
 		return cif
 	if host == "yyx.zy91.com":
 		return zy91
+	if host == "mic.ljjk.org.cn":
+		return ljjk
 
 	raise ValueError("不支持的网站，详情见 README.md")
 

@@ -394,6 +394,18 @@ python downloader.py <url>
 
 该爬虫依赖 Playwright 浏览器自动化，在网页查看器内通过 `dicomProvider.getImageFileAsync` 逐张获取 DICOM 文件。
 
+### mic.ljjk.org.cn
+
+龙江医学影像云 NeuView 移动端分享链接，URL 格式为：
+
+- `https://mic.ljjk.org.cn/NeuView/mobile/?r=<timestamp>#<token>&bType=2d&title=<title>`
+
+```
+python downloader.py <url>
+```
+
+该站点需要使用移动端/微信 UA 访问，程序会调用 `nwservice/rispacsresp` 取得对象存储签名地址，逐张下载 ZIP 并解出其中的标准 DICOM 文件。
+
 ### dicomviewer.*.kayicloud.com
 
 浙江卡易智慧医疗科技 HIDOS AI_PACS 无极云影像平台，URL 格式为：

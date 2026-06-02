@@ -46,6 +46,10 @@ from desktop_core import resolve_crawler_module, url_password_prompt, url_requir
 			"http://ge.jstumor.jszlyy.com.cn:8080/CIF/film?urlParam=URL-PARAM-001",
 			"crawlers.cif",
 		),
+		(
+			"https://mic.ljjk.org.cn/NeuView/mobile/?r=123#TOKEN-001_SIGN_SIGN-001_OPEN_undefined&bType=2d&title=TITLE",
+			"crawlers.ljjk",
+		),
 	],
 )
 def test_resolve_crawler_module(url, module_name):
