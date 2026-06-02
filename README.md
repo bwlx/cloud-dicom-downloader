@@ -38,6 +38,7 @@
   * [m.yzhcloud.com](#myzhcloudcom)
   * [work.sugh.net](#worksughnet)
   * [cloud.wehzsy.com](#cloudwehzsycom)
+  * [yyx.zy91.com](#yyxzy91com)
   * [medapi.dsrmyy.cn](#medapidsrmyycn)
   * [cyemis.bjcyh.mobi](#cyemisbjcyhmobi)
   * [zjyx.gjwlyy.com](#zjyxgjwlyycom)
@@ -324,6 +325,18 @@ python downloader.py <url>
 ```
 python downloader.py <url>
 ```
+
+### yyx.zy91.com
+
+浙江大学医学院附属第一医院的微影（radinfo）患者云，URL 格式为：
+
+- `https://yyx.zy91.com:6443/PC/#/share_report?tel=&pid=<PATIENT_ID>&sid=<ACCESSION_NUMBER>&Expires=<EXPIRES>&Signature=<SIGNATURE>`
+
+```
+python downloader.py <url>
+```
+
+页面打开会弹出图形验证码和身份证后六位的二次验证，但这只是前端 UI 校验；只要分享链接里的 Signature 没过期，本工具直接通过 OAuth 接口取得查看器内嵌的 WADO 地址下载标准 DICOM 文件，无需输入验证码。
 
 ### medapi.dsrmyy.cn
 
