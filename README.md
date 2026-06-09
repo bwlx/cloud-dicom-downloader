@@ -31,6 +31,7 @@
   * [ylyyx.shdc.org.cn](#ylyyxshdcorgcn)
   * [efilm.fs-salon.cn](#efilmfs-saloncn)
   * [efilmcloud.com](#efilmcloudcom)
+  * [cfsaas.wegopoly.com](#cfsaaswegopolycom)
   * [zscloud.zs-hospital.sh.cn](#zs-hospitalshcn)
   * [ftimage.cn](#ftimagecn)
   * [qr.szjudianyun.com](#qrszjudianyuncom)
@@ -45,6 +46,7 @@
   * [ge.jstumor.jszlyy.com.cn](#gejstumorjszlyycomcn)
   * [film.radonline.cn](#filmradonlinecn)
   * [u.elincloud.cn](#uelincloudcn)
+  * [xhbi.whuh.com](#xhbiwhuhcom)
   * [lk-pacsview.rjh.com.cn](#lk-pacsviewrjhcomcn)
   * [dicomviewer.*.kayicloud.com](#dicomviewerkayicloudcom)
 
@@ -251,6 +253,18 @@ python downloader.py <url>
 
 如果下载过程中断，重新对同一个链接和保存目录发起下载时，会复用已有序列目录；对已经完成的文件直接跳过，未完成的单个文件会在重试时重新下载，因此不需要整套检查从头开始。
 
+### cfsaas.wegopoly.com
+
+威众云影像，URL 格式为：
+
+- `https://cfsaas.wegopoly.com/image/?q=<encrypted-token>`
+
+```
+python downloader.py <url>
+```
+
+程序会解密 `q` 参数并调用站点 H5 接口取得检查和序列信息，再按站点返回的 DICOM 对象路径逐张下载。若站点返回的对象本身不存在或不是 DICOM，会直接提示源站对象缺失/未开放原始文件，而不会保存 HTML/XML 错误页。
+
 ### 202.100.221.200
 
 东软睿影 `M-Viewer` 的短链和 profile 链接，例如：
@@ -380,6 +394,18 @@ python downloader.py <url>
 - `https://u.elincloud.cn/index.html#/reportView?...`
 
 这类云影像链接通常在网页查看器里就已经提供了直接下载 DICOM 的功能，一般不需要再通过本项目下载，因此目前不单独适配。
+
+### xhbi.whuh.com
+
+武汉大学中南医院云影像，支持微信里免安全码打开的报告链接：
+
+- `https://xhbi.whuh.com/index.html#/reportView?...`
+
+```
+python downloader.py <url>
+```
+
+该站点的原始影像由云影像平台在服务端打包，程序会直接调用电脑端下载接口，等待压缩任务完成后保存 `.zip` 文件。
 
 ### lk-pacsview.rjh.com.cn
 

@@ -50,6 +50,14 @@ from desktop_core import resolve_crawler_module, url_password_prompt, url_requir
 			"https://mic.ljjk.org.cn/NeuView/mobile/?r=123#TOKEN-001_SIGN_SIGN-001_OPEN_undefined&bType=2d&title=TITLE",
 			"crawlers.ljjk",
 		),
+		(
+			"https://cfsaas.wegopoly.com/image/?q=TOKEN-001",
+			"crawlers.wegopoly",
+		),
+		(
+			"https://xhbi.whuh.com/index.html#/reportView?h=HOSPITAL-001&e=EXAM-001&p=PATIENT-001&r=REPORT-001&t=1&key=KEY-001",
+			"crawlers.whuh",
+		),
 	],
 )
 def test_resolve_crawler_module(url, module_name):
