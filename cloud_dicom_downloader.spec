@@ -3,7 +3,7 @@ import os
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, copy_metadata
 
 playwright_datas, playwright_binaries, playwright_hiddenimports = collect_all("playwright")
 pydicom_datas, pydicom_binaries, pydicom_hiddenimports = collect_all("pydicom")
@@ -12,6 +12,7 @@ cv2_datas, cv2_binaries, cv2_hiddenimports = collect_all("cv2")
 datas = playwright_datas + pydicom_datas
 binaries = playwright_binaries + pydicom_binaries
 hiddenimports = playwright_hiddenimports + pydicom_hiddenimports
+datas += copy_metadata("pydicom")
 datas += cv2_datas
 binaries += cv2_binaries
 hiddenimports += cv2_hiddenimports
