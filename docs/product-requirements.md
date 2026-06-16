@@ -69,3 +69,27 @@
 3. 不再有 PNG 导出 UI 交互（不点击"导出"按钮）。
 4. 单元测试覆盖 tile 拼接、完整分辨率筛选和 DICOM 构建。
 5. 在线烟测至少覆盖连续两帧导航，避免只验证首帧缓存。
+
+---
+
+## 2026-06-16 radonline 支持 redirect 查询参数格式链接
+
+### 背景
+
+锐达云影像（film.radonline.cn）原有的分享链接使用 `#` fragment 传递路由信息，格式为：
+`/web/fore-end/index.html#/check-detail-share?shareId=xxx`
+
+新出现的链接格式改为通过 `redirect` 查询参数传递路由，如：
+`/web/fore-end/index.html?redirect=%2Fcheck-scan%3FunitId%3Drjzy%26xeguId%3Dxxx`
+
+解码后路径为 `/check-scan?unitId=rjzy&xeguId=xxx`，不包含 `shareId` 参数。
+
+### 目标
+
+- `_parse_share_link` 同时支持 fragment 和 redirect 查询参数两种格式。
+- 对 `/check-scan` 路径，以 `unitId` 或 `xeguId` 的存在性判断链接有效性（替代 `shareId`）。
+
+### 改动
+
+- `crawlers/radonline.py`：`_parse_share_link` 增加 redirect 参数解码分支；新增 `unquote` 导入。
+- `test/test_radonline.py`：新增 2 个测试用例覆盖 redirect 格式。

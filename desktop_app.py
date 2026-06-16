@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Cloud DICOM Downloader"
+APP_VERSION = "0.0.40"
+APP_BUILD_DATE = "2026-06-16"
 BASE_DIR = Path(__file__).resolve().parent
 _SAVE_PATTERNS = (
 	re.compile(r"保存到[:：]\s*(.+)"),
@@ -128,7 +130,7 @@ def _write_qt_import_diagnostics(exc: ImportError) -> Path:
 
 
 try:
-	from PySide6.QtCore import QProcess, QProcessEnvironment, QSettings, QTimer, QUrl
+	from PySide6.QtCore import Qt, QProcess, QProcessEnvironment, QSettings, QTimer, QUrl
 	from PySide6.QtGui import QDesktopServices, QFont, QTextCursor
 	from PySide6.QtWidgets import (
 		QApplication,
@@ -253,6 +255,19 @@ class MainWindow(QMainWindow):
 		header.setObjectName("HeroTitle")
 		header.setFont(QFont("PingFang SC", 22, QFont.Weight.DemiBold))
 
+		version_label = QLabel(f"v{APP_VERSION} · 更新 {APP_BUILD_DATE}")
+		version_label.setObjectName("VersionLabel")
+		version_label.setAlignment(
+			Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop
+		)
+
+		header_row = QHBoxLayout()
+		header_row.setContentsMargins(0, 0, 0, 0)
+		header_row.setSpacing(12)
+		header_row.addWidget(header)
+		header_row.addStretch(1)
+		header_row.addWidget(version_label)
+
 		subtitle = QLabel("纯本地运行，输入报告链接后直接下载 DICOM 到本机目录。")
 		subtitle.setObjectName("HeroSubtitle")
 		subtitle.setWordWrap(True)
@@ -341,7 +356,7 @@ class MainWindow(QMainWindow):
 		status_layout.addLayout(log_actions)
 		status_layout.addWidget(self.log_edit, 1)
 
-		layout.addWidget(header)
+		layout.addLayout(header_row)
 		layout.addWidget(subtitle)
 		layout.addWidget(form_box)
 		layout.addWidget(status_box, 1)
@@ -408,6 +423,10 @@ class MainWindow(QMainWindow):
 			}
 			QLabel#HeroSubtitle, QLabel#HintLabel {
 				color: #64584c;
+			}
+			QLabel#VersionLabel {
+				color: #8a7866;
+				font-size: 12px;
 			}
 			QLabel#StatusLabel {
 				font-size: 15px;

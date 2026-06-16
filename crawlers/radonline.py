@@ -4,7 +4,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import parse_qsl, urlsplit
+from urllib.parse import parse_qsl, unquote, urlsplit
 from zipfile import BadZipFile, ZipFile
 
 from playwright.async_api import async_playwright
@@ -17,7 +17,8 @@ from crawlers._utils import IncompleteDownloadError, make_unique_dir, pathify, s
 _HOST = "film.radonline.cn"
 _SHARE_PAGE_PATH = "/web/fore-end/index.html"
 _SHARE_FRAGMENT_PATH = "/check-detail-share"
-_VIEWER_PATH = "/webImageSyn/activeImage.html"
+_VIEWER_PATHS = ("/webImageSyn/activeImage.html", "/webImage2/activeImage.html")
+_VIEWER_URL_RE = re.compile(r".*/webImage(?:Syn|2)/activeImage\.html.*")
 _VIEWER_SELECTOR = ".image_main"
 _DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000
 _WAIT_VIEWER_SCRIPT = """
@@ -131,12 +132,30 @@ def _parse_share_link(address: URL) -> ShareLink:
 	if address.host != _HOST:
 		raise ValueError("当前链接不是受支持的锐达云影像链接。")
 
-	if address.path == _VIEWER_PATH and address.query.get("mergeParameters"):
+	if address.path in _VIEWER_PATHS and address.query.get("mergeParameters"):
 		return ShareLink(url=str(address), is_viewer=True)
 
 	fragment_path, fragment_query = _fragment_parts(address)
+
+	# 支持通过 redirect 查询参数传递路由信息（替代 fragment 方式）
+	if not fragment_path:
+		redirect_raw = str(address.query.get("redirect") or "").strip()
+		if redirect_raw:
+			redirect_decoded = unquote(redirect_raw)
+			if not redirect_decoded.startswith("/"):
+				redirect_decoded = "/" + redirect_decoded
+			parts = urlsplit(redirect_decoded)
+			fragment_path = parts.path
+			fragment_query = dict(parse_qsl(parts.query, keep_blank_values=True))
+
 	share_id = str(fragment_query.get("shareId") or "").strip()
 	if address.path == _SHARE_PAGE_PATH and fragment_path == _SHARE_FRAGMENT_PATH and share_id:
+		return ShareLink(url=str(address), is_viewer=False)
+
+	# 支持 /check-scan 路径（通过 redirect 参数传入 unitId 和 xeguId）
+	unit_id = str(fragment_query.get("unitId") or "").strip()
+	xegu_id = str(fragment_query.get("xeguId") or "").strip()
+	if address.path == _SHARE_PAGE_PATH and fragment_path == "/check-scan" and (unit_id or xegu_id):
 		return ShareLink(url=str(address), is_viewer=False)
 
 	raise ValueError("当前链接不是受支持的锐达云影像分享链接。")
@@ -230,7 +249,7 @@ async def _open_viewer(page, share: ShareLink):
 	await page.goto(share.url, wait_until="networkidle")
 	if not share.is_viewer:
 		await page.get_by_text("查看影像").click()
-		await page.wait_for_url(re.compile(r".*/webImageSyn/activeImage\.html.*"), timeout=60000)
+		await page.wait_for_url(_VIEWER_URL_RE, timeout=60000)
 	await page.wait_for_selector(_VIEWER_SELECTOR, timeout=60000)
 	await page.wait_for_function(_WAIT_VIEWER_SCRIPT, timeout=120000)
 

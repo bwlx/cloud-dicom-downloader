@@ -22,6 +22,25 @@ def test_parse_share_link_supports_viewer_page():
 	assert link.is_viewer is True
 
 
+def test_parse_share_link_supports_webimage2_viewer_page():
+	link = _parse_share_link(
+		URL("https://film.radonline.cn/webImage2/activeImage.html?mergeParameters=encrypted-payload#/")
+	)
+	assert link.is_viewer is True
+
+def test_parse_share_link_supports_redirect_check_scan():
+	link = _parse_share_link(
+		URL("http://film.radonline.cn/web/fore-end/index.html?redirect=%2Fcheck-scan%3FunitId%3Drjzy%26xeguId%3DUDAyNjA2MDgzMDAyOTM%3D")
+	)
+	assert link.is_viewer is False
+
+
+def test_parse_share_link_supports_redirect_without_slash():
+	link = _parse_share_link(
+		URL("http://film.radonline.cn/web/fore-end/index.html?redirect=check-scan%3FunitId%3Drjzy%26xeguId%3DUDAyNjA2MDgzMDAyOTM%3D")
+	)
+	assert link.is_viewer is False
+
 def test_parse_share_link_rejects_unknown_url():
 	with pytest.raises(ValueError, match="锐达云影像"):
 		_parse_share_link(URL("https://film.radonline.cn/web/fore-end/index.html#/report?shareId=share-id-001"))
