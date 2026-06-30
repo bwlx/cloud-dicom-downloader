@@ -8,8 +8,8 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Cloud DICOM Downloader"
-APP_VERSION = "0.0.40"
-APP_BUILD_DATE = "2026-06-16"
+APP_VERSION = "0.0.41"
+APP_BUILD_DATE = "2026-06-30"
 BASE_DIR = Path(__file__).resolve().parent
 _SAVE_PATTERNS = (
 	re.compile(r"保存到[:：]\s*(.+)"),

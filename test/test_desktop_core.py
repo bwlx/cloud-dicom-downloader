@@ -23,6 +23,14 @@ from desktop_core import resolve_crawler_module, url_password_prompt, url_requir
 			"crawlers.ydyy",
 		),
 		(
+			"https://wis.sj-hospital.cn:6088/M-Viewer/#/info/BUSS-001?hideQrcode=1&forward=phone-visible&shortUrl=short-001&idType=01&sign=jwt-token",
+			"crawlers.ydyy",
+		),
+		(
+			"https://wis.sj-hospital.cn:6088/M-Viewer/m/2D?userId=undefined&tenantId=default&checkserialnum=BUSS-002",
+			"crawlers.ydyy",
+		),
+		(
 			"http://202.100.221.200:6087/short/short-001",
 			"crawlers.neusoft",
 		),
@@ -72,6 +80,12 @@ def test_password_requirement():
 		"https://pacs.ydyy.cn:8860/M-Viewer/#/phone-visible/BUSS-001?hideQrcode=1&forward=phone-visible&shortUrl=short-001&idType=3&sign=jwt-token"
 	)
 	assert url_requires_password("https://pacs.ydyy.cn:8860/M-Viewer/shortserver/short-001")
+	assert not url_requires_password(
+		"https://wis.sj-hospital.cn:6088/M-Viewer/#/info/BUSS-001?hideQrcode=1&forward=phone-visible&shortUrl=short-001&idType=01&sign=jwt-token"
+	)
+	assert not url_requires_password(
+		"https://wis.sj-hospital.cn:6088/M-Viewer/m/2D?userId=undefined&tenantId=default&checkserialnum=BUSS-002"
+	)
 	assert url_requires_password("http://ge.jstumor.jszlyy.com.cn:8080/CIF/user/loginAccCode?urlParam=URL-PARAM-001")
 	assert url_requires_password("http://ge.jstumor.jszlyy.com.cn:8080/CIF/film?urlParam=URL-PARAM-001")
 	assert not url_requires_password("https://mdmis.cq12320.cn/wcs1/mdmis-app/h5/#/share/detail?share_id=a&content=b")

@@ -2,9 +2,11 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from urllib.parse import parse_qsl, urlsplit
 
+from playwright.async_api import Error as PlaywrightError, async_playwright
 from tqdm import tqdm
 from yarl import URL
 
+from crawlers._browser import launch_browser
 from crawlers._utils import SeriesDirectory, new_http_client, suggest_save_dir
 
 _PHONE_VISIBLE_ROUTE = "phone-visible"
@@ -20,6 +22,7 @@ _WECHAT_USER_AGENT = (
 	"AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 "
 	"MicroMessenger/8.0.50 NetType/WIFI Language/zh_CN"
 )
+_PROTECTED_HOSTS = {"wis.sj-hospital.cn"}
 
 
 @dataclass(slots=True)
@@ -54,6 +57,16 @@ class StudyEntry:
 	modality: str
 	study_time: str
 	series: list[SeriesEntry]
+
+
+async def _response_check(response):
+	if (
+		response.status == 412
+		and response.url.host in _PROTECTED_HOSTS
+		and response.url.path == _XML_PATH
+	):
+		return
+	response.raise_for_status()
 
 
 def _split_fragment(address: URL) -> tuple[str, dict[str, str]]:
@@ -169,15 +182,106 @@ async def _verify_authority_code(client, address: URL, link: ShareLink, authorit
 	raise ValueError(f"验证失败，请检查身份证后四位是否正确。{message}")
 
 
-async def _load_study_xml(client, address: URL, buss_id: str) -> str:
+async def _bootstrap_protected_session(client, share_url: str, xml_url: URL) -> str:
+	print("站点启用了浏览器自动安全校验，正在打开临时验证窗口。")
+	async with async_playwright() as playwright:
+		browser = await launch_browser(playwright, headless=False)
+		try:
+			context = await browser.new_context(
+				ignore_https_errors=True,
+				viewport={"width": 1280, "height": 900},
+			)
+			try:
+				page = await context.new_page()
+				navigation_status = {"value": None}
+
+				def track_navigation(response):
+					if response.request.is_navigation_request() and response.frame == page.main_frame:
+						navigation_status["value"] = response.status
+
+				page.on("response", track_navigation)
+				browser_user_agent = await page.evaluate("navigator.userAgent")
+				await page.add_init_script(
+					"Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+				)
+				await page.goto(share_url, wait_until="domcontentloaded", timeout=30000)
+				xml_text = ""
+				for attempt in range(1, 31):
+					await page.wait_for_timeout(1500)
+					try:
+						result = await page.evaluate(
+							"""async (url) => {
+								try {
+									const response = await fetch(url, {
+										credentials: "include",
+										headers: { Accept: "application/xml,text/xml,*/*" },
+									});
+									return { status: response.status, text: await response.text() };
+								} catch (error) {
+									return { status: 0, text: String(error) };
+								}
+							}""",
+							str(xml_url),
+						)
+					except PlaywrightError as exc:
+						if "Execution context was destroyed" in str(exc):
+							continue
+						raise
+
+					xml_text = result["text"]
+					if result["status"] == 200 and "<patient" in xml_text:
+						break
+					if attempt >= 4 and navigation_status["value"] == 400:
+						raise ValueError(
+							"站点安全系统拒绝了内置浏览器（HTTP 400）。"
+							"该链接可在移动端浏览器打开，但当前无法通过电脑端自动化安全校验。"
+						)
+					if attempt % 7 == 0:
+						print(f"浏览器安全校验仍在进行，已等待约 {attempt * 1.5:.0f} 秒。")
+				else:
+					raise ValueError("浏览器自动安全校验在 45 秒内未通过，请稍后重试。")
+
+				cookies = await context.cookies()
+			finally:
+				await context.close()
+		finally:
+			await browser.close()
+
+	if not cookies:
+		raise ValueError("浏览器自动安全校验没有返回有效 Cookie，请稍后重试。")
+
+	origin = URL(share_url).origin()
+	client.headers["User-Agent"] = browser_user_agent
+	for cookie in cookies:
+		client.cookie_jar.update_cookies(
+			{cookie["name"]: cookie["value"]},
+			response_url=origin,
+		)
+	return xml_text
+
+
+async def _load_study_xml(client, address: URL, buss_id: str, share_url: str) -> str:
 	xml_url = address.origin().with_path(_XML_PATH).with_query({
 		"checkserialnum": buss_id,
 		"mo": "true",
 	})
-	async with client.get(str(xml_url), headers={"User-Agent": _WECHAT_USER_AGENT}) as response:
-		text = await response.text()
-		if response.status != 200:
-			raise ValueError("影像数据入口没有返回可用结果，站点接口可能已变化。")
+
+	async def request_xml():
+		async with client.get(str(xml_url), headers={
+			"Referer": share_url,
+			"User-Agent": _WECHAT_USER_AGENT,
+		}) as response:
+			return response.status, await response.text()
+
+	status, text = await request_xml()
+	if status == 412 and address.host in _PROTECTED_HOSTS:
+		text = await _bootstrap_protected_session(client, share_url, xml_url)
+		status = 200
+
+	if status != 200:
+		if status == 412:
+			raise ValueError("站点浏览器安全校验未通过，请关闭验证窗口后重试。")
+		raise ValueError(f"影像数据入口返回 HTTP {status}，站点接口可能已变化。")
 
 	if "<patient" not in text:
 		raise ValueError("影像数据入口没有返回可识别的 XML，站点接口可能已变化。")
@@ -296,13 +400,16 @@ async def run(share_url, *args):
 		raise ValueError("该链接需要填写身份证后四位。")
 
 	print("下载影像 DICOM")
-	async with new_http_client() as client:
+	async with new_http_client(
+		headers={"User-Agent": _WECHAT_USER_AGENT},
+		raise_for_status=_response_check,
+	) as client:
 		if link.short_server_id:
 			link = await _resolve_short_server_link(client, address, link)
 
 		if link.requires_authority_code:
 			await _verify_authority_code(client, address, link, password)
 
-		xml_text = await _load_study_xml(client, address, link.buss_id)
+		xml_text = await _load_study_xml(client, address, link.buss_id, share_url)
 		study = _parse_study_xml(xml_text, address)
 		await _download_study(client, study)

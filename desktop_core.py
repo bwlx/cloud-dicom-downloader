@@ -55,7 +55,7 @@ def resolve_crawler_module(url: str) -> ModuleType:
 		return kayicloud
 	if host in {"zjyx.gjwlyy.com", "zjyxview.gjwlyy.com"}:
 		return gjwlyy
-	if host == "pacs.ydyy.cn":
+	if host in {"pacs.ydyy.cn", "wis.sj-hospital.cn"}:
 		return ydyy
 	if host == "202.100.221.200":
 		return neusoft

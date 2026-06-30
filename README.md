@@ -317,7 +317,12 @@ python downloader.py <url>
 
 ### m.yzhcloud.com
 
-URL 格式为`https://m.yzhcloud.com/w_viewer_2/?study_instance_uid=xxx&org_id=xxx`
+医众数字云影像，两种入口都支持：
+
+- 老版查看器直链：`https://m.yzhcloud.com/w_viewer_2/?study_instance_uid=xxx&org_id=xxx`
+- `pocketfilm` 落地页：`https://m.yzhcloud.com/pocketfilm/index.php?...&a=itemdetails_qrcode&...`
+
+落地页会被自动解析出内嵌的 `dicom_2020/` 查看器链接，再走站点 ajax 接口拿序列列表，最后从 volces TOS 直下 DICOM。患者姓名只在移动 UA 下渲染，crawler 已固定走移动 UA。
 
 ```
 python downloader.py <url>
@@ -364,15 +369,18 @@ python downloader.py <url>
 URL 格式为 `https://cyemis.bjcyh.mobi:8082/Study/ViewImage?studyId=<studyId>`
 
 
-### pacs.ydyy.cn
+### pacs.ydyy.cn / wis.sj-hospital.cn
 
 支持以下入口：
 
 - `https://pacs.ydyy.cn:8860/M-Viewer/shortserver/<shortUrl>`
 - `https://pacs.ydyy.cn:8860/M-Viewer/#/phone-visible/<bussId>?...`
 - `https://pacs.ydyy.cn:8860/M-Viewer/m/2D?tenantId=default&userId=<userId>&checkserialnum=<bussId>`
+- `https://wis.sj-hospital.cn:6088/M-Viewer/#/info/<bussId>?...`
+- `https://wis.sj-hospital.cn:6088/M-Viewer/m/2D?userId=undefined&tenantId=default&checkserialnum=<bussId>`
 
 `phone-visible` 分享链接需要输入身份证后四位，程序会先调用站点验证接口，再自动切到移动端 XML/WADO 下载链路。
+`wis.sj-hospital.cn` 的 `info` 和 `m/2D` 链接不要求后四位；如果站点返回 HTTP 412，程序会打开浏览器窗口完成安全校验后继续下载。
 
 ### film.radonline.cn
 

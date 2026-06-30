@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 from yarl import URL
 
@@ -5,6 +7,7 @@ from crawlers.ydyy import (
 	_build_public_storage_url,
 	_parse_share_link,
 	_parse_study_xml,
+	_response_check,
 	requires_authority_code,
 )
 
@@ -31,6 +34,31 @@ def test_parse_share_link_from_direct_viewer_url():
 
 	assert link.buss_id == "BUSS-002"
 	assert link.requires_authority_code is False
+
+
+def test_parse_share_link_from_sj_hospital_direct_viewer_url():
+	address = URL(
+		"https://wis.sj-hospital.cn:6088/M-Viewer/m/2D"
+		"?userId=undefined&tenantId=default&checkserialnum=BUSS-SJ-001"
+	)
+
+	link = _parse_share_link(address)
+
+	assert link.buss_id == "BUSS-SJ-001"
+	assert link.requires_authority_code is False
+
+
+def test_parse_share_link_from_info_url():
+	address = URL(
+		"https://example-ydyy.invalid:6088/M-Viewer/#/info/BUSS-INFO-001"
+		"?hideQrcode=1&forward=phone-visible&shortUrl=short-info-001&idType=01&sign=jwt-token"
+	)
+
+	link = _parse_share_link(address)
+
+	assert link.buss_id == "BUSS-INFO-001"
+	assert link.requires_authority_code is False
+	assert link.id_type == "01"
 
 
 def test_parse_share_link_from_shortserver_url():
@@ -113,3 +141,26 @@ def test_parse_share_link_rejects_unknown_url():
 
 	with pytest.raises(ValueError, match="不是受支持的云影像分享链接"):
 		_parse_share_link(address)
+
+
+def test_response_check_allows_protected_xml_412():
+	class Response:
+		status = 412
+		url = URL("https://wis.sj-hospital.cn:6088/M-Viewer/m/NeuVnaimage/getxmltowebpacs.action")
+
+		def raise_for_status(self):
+			raise AssertionError("protected XML 412 should be handled by the crawler")
+
+	asyncio.run(_response_check(Response()))
+
+
+def test_response_check_keeps_other_http_errors():
+	class Response:
+		status = 404
+		url = URL("https://wis.sj-hospital.cn:6088/M-Viewer/m/vnaHttp/wado/wado.action")
+
+		def raise_for_status(self):
+			raise RuntimeError("HTTP 404")
+
+	with pytest.raises(RuntimeError, match="HTTP 404"):
+		asyncio.run(_response_check(Response()))
